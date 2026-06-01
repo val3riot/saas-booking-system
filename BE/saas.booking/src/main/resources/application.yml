@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: saas-booking-system
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/booking}
+    username: ${SPRING_DATASOURCE_USERNAME:booking}
+    password: ${SPRING_DATASOURCE_PASSWORD:booking}
+  docker:
+    compose:
+      enabled: ${SPRING_DOCKER_COMPOSE_ENABLED:false}
+      file: ../../infra/docker/dev/docker-compose.yml
+      lifecycle-management: start_only
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-change-me-change-me-change-me-change-me}
+    expiration: ${JWT_EXPIRATION:86400000}
+    issuer: ${JWT_ISSUER:saas-booking-system}
+    audience: ${JWT_AUDIENCE:saas-booking-api}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    persist-authorization: true
+
+server:
+  error:
+    include-message: never

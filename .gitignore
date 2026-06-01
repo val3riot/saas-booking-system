@@ -1,0 +1,83 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+*.iml
+.vscode/*
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!.env.*.example
+!*.env.example
+!*.env.*.example
+
+# Java / Spring Boot / Maven
+target/
+**/target/
+.mvn/apache-maven-*/
+**/.mvn/apache-maven-*/
+
+# React / Node
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+.vite/
+**/.vite/
+.turbo/
+**/.turbo/
+.next/
+**/.next/
+.nuxt/
+**/.nuxt/
+
+# Package manager caches
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Docker / local infrastructure state
+docker-data/
+data/
+volumes/
+postgres-data/
+redis-data/
+kafka-data/
+zookeeper-data/
+*.pid
+
+# Test / tooling caches
+.pytest_cache/
+.scannerwork/
+.sonar/
+.eslintcache
+.stylelintcache
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
