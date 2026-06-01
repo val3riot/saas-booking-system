@@ -10,6 +10,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Optional<Booking> findByIdAndCustomerId(Long id, Long customerId);
 
+    List<Booking> findAllByProviderIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
+            Long providerId,
+            List<BookingStatus> statuses,
+            java.time.Instant endsAt,
+            java.time.Instant startsAt
+    );
+
     boolean existsByProviderIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThan(
             Long providerId,
             List<BookingStatus> statuses,

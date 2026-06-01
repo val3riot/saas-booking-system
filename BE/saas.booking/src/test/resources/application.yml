@@ -18,6 +18,11 @@ app:
     expiration: 86400000
     issuer: saas-booking-system-test
     audience: saas-booking-api-test
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 logging:
   level:
     root: INFO

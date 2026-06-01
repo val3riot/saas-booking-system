@@ -91,4 +91,23 @@ public class OfferedService {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public void update(String name, String description, int durationMinutes, int priceCents, boolean active) {
+        this.name = name;
+        this.description = description;
+        this.durationMinutes = durationMinutes;
+        this.priceCents = priceCents;
+        this.active = active;
+        this.updatedAt = Instant.now();
+    }
+
+    public void activate() {
+        this.active = true;
+        this.updatedAt = Instant.now();
+    }
+
+    public void deactivate() {
+        this.active = false;
+        this.updatedAt = Instant.now();
+    }
 }

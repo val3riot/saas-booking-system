@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.booking.provider.ProviderRepository;
 import it.booking.user.AppUser;
 import it.booking.user.AppUserRepository;
 import it.booking.user.UserRole;
@@ -31,6 +32,9 @@ class AuthControllerIntegrationTest {
     private AppUserRepository users;
 
     @Autowired
+    private ProviderRepository providers;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -50,6 +54,55 @@ class AuthControllerIntegrationTest {
         AuthResponse auth = objectMapper.readValue(response, AuthResponse.class);
         assertThat(auth.token()).isNotBlank();
         assertThat(jwtService.parseToken(auth.token()).role()).isEqualTo(UserRole.CUSTOMER);
+    }
+
+    @Test
+    void loginNormalizesEmail() throws Exception {
+        users.save(new AppUser("normalized@example.com", passwordEncoder.encode("Password1!")));
+
+        String response = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AuthRequest("Normalized@Example.COM", "Password1!"))))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        AuthResponse auth = objectMapper.readValue(response, AuthResponse.class);
+        AuthenticatedUser authenticatedUser = jwtService.parseToken(auth.token());
+        assertThat(authenticatedUser.email()).isEqualTo("normalized@example.com");
+        assertThat(users.findByEmail("normalized@example.com")).isPresent();
+    }
+
+    @Test
+    void providerCanRegisterWithBusinessProfile() throws Exception {
+        ProviderRegistrationRequest request = new ProviderRegistrationRequest(
+                "provider-register@example.com",
+                "Password1!",
+                "Studio Provider",
+                "Consulenze professionali",
+                "consulting",
+                "Milano",
+                "Via Roma 1"
+        );
+
+        String response = mockMvc.perform(post("/api/auth/register/provider")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        AuthResponse auth = objectMapper.readValue(response, AuthResponse.class);
+        AuthenticatedUser authenticatedUser = jwtService.parseToken(auth.token());
+        assertThat(authenticatedUser.role()).isEqualTo(UserRole.PROVIDER);
+        assertThat(providers.findByUserId(authenticatedUser.id()))
+                .isPresent()
+                .get()
+                .extracting("businessName")
+                .isEqualTo("Studio Provider");
     }
 
     @Test

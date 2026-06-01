@@ -131,6 +131,31 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("AUTH_005"));
     }
 
+    @Test
+    void adminUpdateUserRejectsDuplicateEmail() throws Exception {
+        String adminToken = createAdminAndLogin("admin-update-duplicate@example.com");
+        AppUser existing = users.save(new AppUser("update-existing@example.com", passwordEncoder.encode("Password1!"), UserRole.CUSTOMER));
+        AppUser target = users.save(new AppUser("update-target@example.com", passwordEncoder.encode("Password1!"), UserRole.PROVIDER));
+        UpdateUserRequest request = new UpdateUserRequest(existing.getEmail(), UserRole.PROVIDER, true);
+
+        mockMvc.perform(put("/api/users/{id}", target.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AUTH_005"));
+    }
+
+    @Test
+    void adminGetMissingUserReturnsNotFound() throws Exception {
+        String adminToken = createAdminAndLogin("admin-missing-user@example.com");
+
+        mockMvc.perform(get("/api/users/{id}", 999999)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_001"));
+    }
+
     private String registerAndGetToken(String email) throws Exception {
         String response = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)

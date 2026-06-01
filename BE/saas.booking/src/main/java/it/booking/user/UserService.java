@@ -1,5 +1,7 @@
 package it.booking.user;
 
+import static it.booking.common.EmailUtils.normalize;
+
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
 import java.util.List;
@@ -37,7 +39,7 @@ public class UserService {
 
     @Transactional
     public UserResponse create(CreateUserRequest request) {
-        String email = normalizeEmail(request.email());
+        String email = normalize(request.email());
         if (users.existsByEmail(email)) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
@@ -51,7 +53,7 @@ public class UserService {
         AppUser user = users.findById(id)
                 .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
 
-        String email = normalizeEmail(request.email());
+        String email = normalize(request.email());
         if (users.existsByEmailAndIdNot(email, id)) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
@@ -77,9 +79,5 @@ public class UserService {
     @Transactional
     public void delete(Long id) {
         disable(id);
-    }
-
-    private String normalizeEmail(String email) {
-        return email.trim().toLowerCase();
     }
 }

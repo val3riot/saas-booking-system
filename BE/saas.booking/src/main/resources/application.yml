@@ -30,7 +30,10 @@ app:
     audience: ${JWT_AUDIENCE:saas-booking-api}
 
 springdoc:
+  api-docs:
+    enabled: false
   swagger-ui:
+    enabled: false
     path: /swagger-ui.html
     persist-authorization: true
 

@@ -1,5 +1,6 @@
 package it.booking.availability;
 
+import it.booking.offering.OfferedService;
 import it.booking.provider.Provider;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -25,6 +26,10 @@ public class Availability {
     @JoinColumn(name = "provider_id", nullable = false)
     private Provider provider;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "service_id", nullable = false)
+    private OfferedService service;
+
     @Column(nullable = false)
     private short dayOfWeek;
 
@@ -46,8 +51,9 @@ public class Availability {
     protected Availability() {
     }
 
-    public Availability(Provider provider, short dayOfWeek, LocalTime startTime, LocalTime endTime) {
+    public Availability(Provider provider, OfferedService service, short dayOfWeek, LocalTime startTime, LocalTime endTime) {
         this.provider = provider;
+        this.service = service;
         this.dayOfWeek = dayOfWeek;
         this.startTime = startTime;
         this.endTime = endTime;
@@ -59,6 +65,10 @@ public class Availability {
 
     public Provider getProvider() {
         return provider;
+    }
+
+    public OfferedService getService() {
+        return service;
     }
 
     public short getDayOfWeek() {
@@ -83,5 +93,23 @@ public class Availability {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void update(short dayOfWeek, LocalTime startTime, LocalTime endTime, boolean active) {
+        this.dayOfWeek = dayOfWeek;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.active = active;
+        this.updatedAt = Instant.now();
+    }
+
+    public void activate() {
+        this.active = true;
+        this.updatedAt = Instant.now();
+    }
+
+    public void deactivate() {
+        this.active = false;
+        this.updatedAt = Instant.now();
     }
 }

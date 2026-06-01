@@ -98,4 +98,29 @@ public class Provider {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public void update(String businessName, String description, String category, String city, String address, boolean active) {
+        this.businessName = businessName;
+        this.description = description;
+        this.category = category;
+        this.city = city;
+        this.address = address;
+        this.active = active;
+        this.updatedAt = Instant.now();
+    }
+
+    public void changeUser(AppUser user) {
+        this.user = user;
+        this.updatedAt = Instant.now();
+    }
+
+    public void activate() {
+        this.active = true;
+        this.updatedAt = Instant.now();
+    }
+
+    public void deactivate() {
+        this.active = false;
+        this.updatedAt = Instant.now();
+    }
 }

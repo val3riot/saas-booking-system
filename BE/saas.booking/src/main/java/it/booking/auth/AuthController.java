@@ -21,6 +21,11 @@ public class AuthController {
         return authService.register(request);
     }
 
+    @PostMapping("/register/provider")
+    AuthResponse registerProvider(@Valid @RequestBody ProviderRegistrationRequest request) {
+        return authService.registerProvider(request);
+    }
+
     @PostMapping("/login")
     AuthResponse login(@Valid @RequestBody AuthRequest request) {
         return authService.login(request);

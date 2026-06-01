@@ -61,7 +61,7 @@ public class Booking {
         this.service = service;
         this.startsAt = startsAt;
         this.endsAt = endsAt;
-        this.status = BookingStatus.PENDING;
+        this.status = BookingStatus.CONFIRMED;
     }
 
     public Long getId() {
@@ -102,14 +102,6 @@ public class Booking {
 
     public void cancel() {
         this.status = BookingStatus.CANCELLED;
-        this.updatedAt = Instant.now();
-    }
-
-    public void update(Provider provider, OfferedService service, Instant startsAt, Instant endsAt) {
-        this.provider = provider;
-        this.service = service;
-        this.startsAt = startsAt;
-        this.endsAt = endsAt;
         this.updatedAt = Instant.now();
     }
 }
