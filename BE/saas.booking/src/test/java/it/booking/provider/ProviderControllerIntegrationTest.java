@@ -12,9 +12,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.booking.auth.AuthRequest;
 import it.booking.auth.AuthResponse;
 import it.booking.availability.Availability;
+import it.booking.availability.AvailabilityExceptionRepository;
 import it.booking.availability.AvailabilityRepository;
+import it.booking.availability.CreateAvailabilityExceptionRequest;
 import it.booking.availability.CreateAvailabilityRequest;
+import it.booking.availability.UpdateAvailabilityExceptionRequest;
 import it.booking.availability.UpdateAvailabilityRequest;
+import it.booking.booking.Booking;
+import it.booking.booking.BookingRepository;
 import it.booking.offering.CreateOfferedServiceRequest;
 import it.booking.offering.OfferedService;
 import it.booking.offering.OfferedServiceRepository;
@@ -22,6 +27,7 @@ import it.booking.offering.UpdateOfferedServiceRequest;
 import it.booking.user.AppUser;
 import it.booking.user.AppUserRepository;
 import it.booking.user.UserRole;
+import java.time.Instant;
 import java.time.LocalTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +59,12 @@ class ProviderControllerIntegrationTest {
 
     @Autowired
     private AvailabilityRepository availabilities;
+
+    @Autowired
+    private AvailabilityExceptionRepository availabilityExceptions;
+
+    @Autowired
+    private BookingRepository bookings;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -544,6 +556,141 @@ class ProviderControllerIntegrationTest {
                 .andExpect(jsonPath("$.fields.dayOfWeek.code").value("VAL_002"))
                 .andExpect(jsonPath("$.fields.startTime.code").value("VAL_001"))
                 .andExpect(jsonPath("$.fields.endTime.code").value("VAL_001"));
+    }
+
+    @Test
+    void providerCanManageAvailabilityExceptions() throws Exception {
+        ProviderSession session = createProviderAndLogin("owner-exception@example.com", "Exception Studio");
+        OfferedService service = offeredServices.save(new OfferedService(session.provider(), "Visita", null, 60, 5000));
+        Instant startsAt = Instant.parse("2026-06-08T10:00:00Z");
+        Instant endsAt = Instant.parse("2026-06-08T11:00:00Z");
+
+        String createResponse = mockMvc.perform(post("/api/providers/me/availability-exceptions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateAvailabilityExceptionRequest(
+                                service.getId(),
+                                startsAt,
+                                endsAt,
+                                "Permesso"
+                        ))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.providerId").value(session.provider().getId()))
+                .andExpect(jsonPath("$.serviceId").value(service.getId()))
+                .andExpect(jsonPath("$.reason").value("Permesso"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        Long exceptionId = objectMapper.readTree(createResponse).get("id").asLong();
+
+        mockMvc.perform(get("/api/providers/me/availability-exceptions/{exceptionId}", exceptionId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(exceptionId));
+
+        mockMvc.perform(get("/api/providers/me/availability-exceptions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(exceptionId));
+
+        mockMvc.perform(put("/api/providers/me/availability-exceptions/{exceptionId}", exceptionId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateAvailabilityExceptionRequest(
+                                null,
+                                startsAt,
+                                Instant.parse("2026-06-08T12:00:00Z"),
+                                "Chiusura studio",
+                                true
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.serviceId").doesNotExist())
+                .andExpect(jsonPath("$.reason").value("Chiusura studio"));
+
+        mockMvc.perform(post("/api/providers/me/availability-exceptions/{exceptionId}/deactivate", exceptionId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token()))
+                .andExpect(status().isNoContent());
+
+        assertThat(availabilityExceptions.findById(exceptionId).orElseThrow().isActive()).isFalse();
+
+        mockMvc.perform(post("/api/providers/me/availability-exceptions/{exceptionId}/activate", exceptionId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(delete("/api/providers/me/availability-exceptions/{exceptionId}", exceptionId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void providerAvailabilityExceptionRejectsOverlapsAndInvalidInterval() throws Exception {
+        ProviderSession session = createProviderAndLogin("owner-exception-overlap@example.com", "Exception Overlap Studio");
+        OfferedService service = offeredServices.save(new OfferedService(session.provider(), "Visita", null, 60, 5000));
+        Instant startsAt = Instant.parse("2026-06-08T10:00:00Z");
+        Instant endsAt = Instant.parse("2026-06-08T11:00:00Z");
+
+        mockMvc.perform(post("/api/providers/me/availability-exceptions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateAvailabilityExceptionRequest(
+                                service.getId(),
+                                startsAt,
+                                endsAt,
+                                "Primo blocco"
+                        ))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/providers/me/availability-exceptions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateAvailabilityExceptionRequest(
+                                service.getId(),
+                                Instant.parse("2026-06-08T10:30:00Z"),
+                                Instant.parse("2026-06-08T11:30:00Z"),
+                                "Overlap"
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVEX_003"));
+
+        mockMvc.perform(post("/api/providers/me/availability-exceptions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateAvailabilityExceptionRequest(
+                                service.getId(),
+                                endsAt,
+                                startsAt,
+                                "Intervallo errato"
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("AVEX_002"));
+    }
+
+    @Test
+    void providerAvailabilityExceptionRejectsActiveBookingOverlap() throws Exception {
+        ProviderSession session = createProviderAndLogin("owner-exception-booking@example.com", "Exception Booking Studio");
+        OfferedService service = offeredServices.save(new OfferedService(session.provider(), "Visita", null, 60, 5000));
+        AppUser customer = createUser("owner-exception-booking-customer@example.com", UserRole.CUSTOMER);
+        Instant startsAt = Instant.parse("2026-06-09T10:00:00Z");
+        bookings.save(new Booking(
+                customer,
+                session.provider(),
+                service,
+                startsAt,
+                startsAt.plusSeconds(3600)
+        ));
+
+        mockMvc.perform(post("/api/providers/me/availability-exceptions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + session.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateAvailabilityExceptionRequest(
+                                service.getId(),
+                                Instant.parse("2026-06-09T10:30:00Z"),
+                                Instant.parse("2026-06-09T11:30:00Z"),
+                                "Indisponibilità su prenotazione esistente"
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVEX_004"));
     }
 
     @Test

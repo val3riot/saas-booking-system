@@ -6,9 +6,14 @@ Root del progetto booking platform.
 
 ```text
 BE/saas.booking/    Spring Boot API
-docs/                Documentazione architetturale e appunti futuri
+docs/                Analisi progetto e roadmap evolutiva
 infra/docker/dev/    Servizi locali per sviluppo
 ```
+
+## Documentazione
+
+- [Project design](docs/project-design.md)
+- [Roadmap](docs/roadmap.md)
 
 ## Backend
 
@@ -22,4 +27,10 @@ Swagger:
 
 ```text
 http://localhost:8080/swagger-ui.html
+```
+
+Swagger è esposto solo con profilo `dev`:
+
+```bash
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```

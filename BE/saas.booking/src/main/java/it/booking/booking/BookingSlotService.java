@@ -1,6 +1,8 @@
 package it.booking.booking;
 
 import it.booking.availability.Availability;
+import it.booking.availability.AvailabilityException;
+import it.booking.availability.AvailabilityExceptionRepository;
 import it.booking.availability.AvailabilityRepository;
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
@@ -28,17 +30,20 @@ public class BookingSlotService {
     private final ProviderRepository providers;
     private final OfferedServiceRepository offeredServices;
     private final AvailabilityRepository availabilities;
+    private final AvailabilityExceptionRepository availabilityExceptions;
     private final BookingRepository bookings;
 
     public BookingSlotService(
             ProviderRepository providers,
             OfferedServiceRepository offeredServices,
             AvailabilityRepository availabilities,
+            AvailabilityExceptionRepository availabilityExceptions,
             BookingRepository bookings
     ) {
         this.providers = providers;
         this.offeredServices = offeredServices;
         this.availabilities = availabilities;
+        this.availabilityExceptions = availabilityExceptions;
         this.bookings = bookings;
     }
 
@@ -67,6 +72,12 @@ public class BookingSlotService {
                         rangeEnd,
                         rangeStart
                 );
+        List<AvailabilityException> blockingExceptions = availabilityExceptions.findActiveBlocking(
+                providerId,
+                serviceId,
+                rangeStart,
+                rangeEnd
+        );
 
         List<BookingSlotResponse> slots = new ArrayList<>();
         Instant now = Instant.now();
@@ -75,7 +86,7 @@ public class BookingSlotService {
             short dayOfWeek = (short) current.getDayOfWeek().getValue();
             for (Availability rule : rules) {
                 if (rule.getDayOfWeek() == dayOfWeek) {
-                    addSlotsForRule(slots, service, current, rule, bookedSlots, now);
+                    addSlotsForRule(slots, service, current, rule, bookedSlots, blockingExceptions, now);
                 }
             }
             current = current.plusDays(1);
@@ -89,6 +100,7 @@ public class BookingSlotService {
             LocalDate date,
             Availability rule,
             List<Booking> bookedSlots,
+            List<AvailabilityException> blockingExceptions,
             Instant now
     ) {
         LocalTime startTime = rule.getStartTime();
@@ -97,13 +109,14 @@ public class BookingSlotService {
             Instant startsAt = date.atTime(startTime).toInstant(ZoneOffset.UTC);
             Instant endsAt = date.atTime(endTime).toInstant(ZoneOffset.UTC);
             if (startsAt.isAfter(now)) {
+                BookingSlotStatus status = slotStatus(bookedSlots, blockingExceptions, startsAt, endsAt);
                 slots.add(new BookingSlotResponse(
                         rule.getProvider().getId(),
                         service.getId(),
                         date,
                         startsAt,
                         endsAt,
-                        isBooked(bookedSlots, startsAt, endsAt) ? BookingSlotStatus.BOOKED : BookingSlotStatus.AVAILABLE
+                        status
                 ));
             }
             startTime = endTime;
@@ -114,6 +127,26 @@ public class BookingSlotService {
     private boolean isBooked(List<Booking> bookedSlots, Instant startsAt, Instant endsAt) {
         return bookedSlots.stream()
                 .anyMatch(booking -> booking.getStartsAt().isBefore(endsAt) && booking.getEndsAt().isAfter(startsAt));
+    }
+
+    private BookingSlotStatus slotStatus(
+            List<Booking> bookedSlots,
+            List<AvailabilityException> blockingExceptions,
+            Instant startsAt,
+            Instant endsAt
+    ) {
+        if (isBlocked(blockingExceptions, startsAt, endsAt)) {
+            return BookingSlotStatus.BLOCKED;
+        }
+        if (isBooked(bookedSlots, startsAt, endsAt)) {
+            return BookingSlotStatus.BOOKED;
+        }
+        return BookingSlotStatus.AVAILABLE;
+    }
+
+    private boolean isBlocked(List<AvailabilityException> blockingExceptions, Instant startsAt, Instant endsAt) {
+        return blockingExceptions.stream()
+                .anyMatch(exception -> exception.getStartsAt().isBefore(endsAt) && exception.getEndsAt().isAfter(startsAt));
     }
 
     private void validateProviderAndService(Provider provider, OfferedService service) {

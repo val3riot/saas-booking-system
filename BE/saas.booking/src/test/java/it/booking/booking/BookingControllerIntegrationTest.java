@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.booking.auth.AuthRequest;
 import it.booking.auth.AuthResponse;
 import it.booking.availability.Availability;
+import it.booking.availability.AvailabilityException;
+import it.booking.availability.AvailabilityExceptionRepository;
 import it.booking.availability.AvailabilityRepository;
 import it.booking.offering.OfferedService;
 import it.booking.offering.OfferedServiceRepository;
@@ -54,6 +56,9 @@ class BookingControllerIntegrationTest {
 
     @Autowired
     private AvailabilityRepository availabilities;
+
+    @Autowired
+    private AvailabilityExceptionRepository availabilityExceptions;
 
     @Autowired
     private BookingRepository bookings;
@@ -119,6 +124,45 @@ class BookingControllerIntegrationTest {
 
         Booking cancelled = bookings.findById(created.id()).orElseThrow();
         assertThat(cancelled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(cancelled.getCancelledAt()).isNotNull();
+        assertThat(cancelled.getCancelledBy().getId()).isEqualTo(created.customerId());
+        assertThat(cancelled.getCancellationReason()).isNull();
+    }
+
+    @Test
+    void cancelBookingRejectsAlreadyCancelledBooking() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-cancel-twice-provider@example.com");
+        String customerToken = createCustomerAndLogin("booking-cancel-twice-customer@example.com");
+        Instant startsAt = nextSlot(DayOfWeek.MONDAY, LocalTime.of(9, 0));
+
+        String createResponse = mockMvc.perform(post("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateBookingRequest(
+                                provider.provider().getId(),
+                                provider.service().getId(),
+                                startsAt
+                        ))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        BookingResponse created = objectMapper.readValue(createResponse, BookingResponse.class);
+
+        mockMvc.perform(post("/api/bookings/{bookingId}/cancel", created.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CancelBookingRequest("Cambio programma"))))
+                .andExpect(status().isNoContent());
+
+        Booking cancelled = bookings.findById(created.id()).orElseThrow();
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Cambio programma");
+
+        mockMvc.perform(post("/api/bookings/{bookingId}/cancel", created.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_006"));
     }
 
     @Test
@@ -261,6 +305,72 @@ class BookingControllerIntegrationTest {
     }
 
     @Test
+    void availabilityExceptionBlocksSlotAndRejectsBooking() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-blocked-provider@example.com");
+        String customerToken = createCustomerAndLogin("booking-blocked-customer@example.com");
+        LocalDate date = nextDate(DayOfWeek.MONDAY);
+        Instant blockedStartsAt = date.atTime(10, 0).toInstant(ZoneOffset.UTC);
+        Instant blockedEndsAt = date.atTime(11, 0).toInstant(ZoneOffset.UTC);
+        availabilityExceptions.save(new AvailabilityException(
+                provider.provider(),
+                provider.service(),
+                blockedStartsAt,
+                blockedEndsAt,
+                "Permesso"
+        ));
+
+        mockMvc.perform(get("/api/booking-slots")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .param("providerId", provider.provider().getId().toString())
+                        .param("serviceId", provider.service().getId().toString())
+                        .param("from", date.toString())
+                        .param("to", date.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("AVAILABLE"))
+                .andExpect(jsonPath("$[1].startsAt").value(blockedStartsAt.toString()))
+                .andExpect(jsonPath("$[1].status").value("BLOCKED"))
+                .andExpect(jsonPath("$[2].status").value("AVAILABLE"));
+
+        mockMvc.perform(post("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateBookingRequest(
+                                provider.provider().getId(),
+                                provider.service().getId(),
+                                blockedStartsAt
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_003"));
+    }
+
+    @Test
+    void providerWideAvailabilityExceptionBlocksEveryService() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-provider-wide-block-provider@example.com");
+        OfferedService secondService = offeredServices.save(new OfferedService(provider.provider(), "Controllo", null, 60, 3000));
+        availabilities.save(new Availability(provider.provider(), secondService, (short) 1, LocalTime.of(9, 0), LocalTime.of(12, 0)));
+        String customerToken = createCustomerAndLogin("booking-provider-wide-block-customer@example.com");
+        LocalDate date = nextDate(DayOfWeek.MONDAY);
+        Instant blockedStartsAt = date.atTime(9, 0).toInstant(ZoneOffset.UTC);
+        availabilityExceptions.save(new AvailabilityException(
+                provider.provider(),
+                null,
+                blockedStartsAt,
+                date.atTime(10, 0).toInstant(ZoneOffset.UTC),
+                "Chiusura studio"
+        ));
+
+        mockMvc.perform(get("/api/booking-slots")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .param("providerId", provider.provider().getId().toString())
+                        .param("serviceId", secondService.getId().toString())
+                        .param("from", date.toString())
+                        .param("to", date.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].startsAt").value(blockedStartsAt.toString()))
+                .andExpect(jsonPath("$[0].status").value("BLOCKED"));
+    }
+
+    @Test
     void bookingSlotsRejectsDateTimeQueryParameters() throws Exception {
         ProviderFixture provider = createProviderFixture("booking-slots-invalid-date-provider@example.com");
         String customerToken = createCustomerAndLogin("booking-slots-invalid-date-customer@example.com");
@@ -303,6 +413,34 @@ class BookingControllerIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + otherToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("BOOK_001"));
+    }
+
+    @Test
+    void providerCanSeeAgendaForReceivedBookings() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-agenda-provider@example.com");
+        String customerToken = createCustomerAndLogin("booking-agenda-customer@example.com");
+        String providerToken = login(provider.user().getEmail());
+        LocalDate date = nextDate(DayOfWeek.MONDAY);
+        Instant startsAt = date.atTime(9, 0).toInstant(ZoneOffset.UTC);
+
+        mockMvc.perform(post("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateBookingRequest(
+                                provider.provider().getId(),
+                                provider.service().getId(),
+                                startsAt
+                        ))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/providers/me/agenda")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + providerToken)
+                        .param("from", date.toString())
+                        .param("to", date.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].providerId").value(provider.provider().getId()))
+                .andExpect(jsonPath("$[0].serviceId").value(provider.service().getId()))
+                .andExpect(jsonPath("$[0].startsAt").value(startsAt.toString()));
     }
 
     private ProviderFixture createProviderFixture(String email) {

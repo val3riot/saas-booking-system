@@ -48,8 +48,12 @@ public class BookingController {
 
     @PostMapping("/{bookingId}/cancel")
     @ApiResponse(responseCode = "204", description = "Booking cancelled")
-    ResponseEntity<Void> cancel(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long bookingId) {
-        bookingService.cancelForCurrentCustomer(user.id(), bookingId);
+    ResponseEntity<Void> cancel(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long bookingId,
+            @Valid @RequestBody(required = false) CancelBookingRequest request
+    ) {
+        bookingService.cancelForCurrentCustomer(user.id(), bookingId, request);
         return ResponseEntity.noContent().build();
     }
 }

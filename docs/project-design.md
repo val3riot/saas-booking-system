@@ -15,7 +15,7 @@ Il dominio scelto è quello della prenotazione di servizi offerti da professioni
 
 ---
 
-## Stack tecnologico previsto
+## Stack tecnologico di riferimento
 
 ### Backend
 
@@ -30,7 +30,7 @@ Il dominio scelto è quello della prenotazione di servizi offerti da professioni
 - Mockito
 - Swagger / OpenAPI
 
-### Frontend (fase finale)
+### Frontend
 
 - React
 - Vite
@@ -73,6 +73,7 @@ Professionista o struttura che offre servizi prenotabili.
 
 Funzionalità previste:
 
+- registrazione autonoma come fornitore;
 - creazione profilo provider;
 - modifica dati professionali;
 - gestione servizi offerti;
@@ -90,6 +91,7 @@ Funzionalità previste:
 
 - gestione utenti;
 - gestione provider;
+- moderazione o modifica critica dei provider;
 - gestione categorie;
 - visualizzazione statistiche base;
 - abilitazione o disabilitazione account.
@@ -149,13 +151,35 @@ Informazioni principali:
 
 ### Availability
 
-Rappresenta le disponibilità configurate dal provider.
+Rappresenta le disponibilità ricorrenti configurate dal provider per uno specifico servizio.
 
 Esempi:
 
-- lunedì 09:00 - 13:00;
-- mercoledì 15:00 - 19:00;
-- periodo ferie o indisponibilità.
+- consulenza: lunedì 09:00 - 13:00;
+- visita specialistica: mercoledì 15:00 - 19:00;
+
+Le disponibilità ricorrenti definiscono quando un servizio può generare slot prenotabili.
+Le indisponibilità puntuali sono gestite separatamente, perché rappresentano eccezioni al calendario ordinario.
+
+### Availability Exception
+
+Rappresenta un blocco puntuale impostato dal provider.
+
+Esempi:
+
+- ferie;
+- permesso personale;
+- chiusura straordinaria;
+- indisponibilità di un singolo servizio in una fascia oraria.
+
+Regole principali:
+
+- può bloccare tutti i servizi del provider;
+- può bloccare un solo servizio specifico;
+- può coprire una fascia oraria o una giornata intera;
+- non può sovrapporsi a prenotazioni attive;
+- gli slot coperti dal blocco vengono restituiti come `BLOCKED`;
+- una prenotazione non può essere creata su uno slot bloccato.
 
 ### Booking
 
@@ -179,6 +203,9 @@ Informazioni principali:
 - data e ora inizio;
 - data e ora fine;
 - stato prenotazione;
+- eventuale data di cancellazione;
+- eventuale utente che ha cancellato;
+- eventuale motivo di cancellazione;
 - timestamp di creazione e modifica.
 
 ### Notification
@@ -216,7 +243,7 @@ Spring Boot REST API
 PostgreSQL
 ```
 
-Evoluzione architetturale prevista:
+Architettura target:
 
 ```text
 React Frontend
@@ -259,16 +286,38 @@ Aspetti da valutare durante lo sviluppo:
 
 Una prenotazione deve seguire un ciclo di vita chiaro.
 
-Esempio:
+Transizioni principali:
 
 ```text
-PENDING -> CONFIRMED -> COMPLETED
+PENDING -> CONFIRMED
 PENDING -> REJECTED
 PENDING -> CANCELLED
 CONFIRMED -> CANCELLED
+CONFIRMED -> COMPLETED
 ```
 
 Le transizioni non valide devono essere bloccate dal backend.
+Una prenotazione già cancellata non può essere cancellata di nuovo.
+
+### Regole di disponibilità e slot
+
+Gli slot prenotabili sono generati dal backend a partire da:
+
+- servizio scelto;
+- durata del servizio;
+- disponibilità ricorrenti del servizio;
+- booking già presenti;
+- indisponibilità puntuali del provider.
+
+Uno slot può essere:
+
+```text
+AVAILABLE
+BOOKED
+BLOCKED
+```
+
+Gli stati `PENDING` e `CONFIRMED` bloccano lo slot. Gli stati `CANCELLED`, `REJECTED` e `COMPLETED` non devono impedire nuove prenotazioni sullo stesso intervallo.
 
 ### Validità delle disponibilità
 
@@ -277,269 +326,30 @@ Una prenotazione può essere creata solo se:
 - il provider esiste;
 - il servizio è attivo;
 - lo slot richiesto rientra nelle disponibilità configurate;
+- lo slot richiesto non è coperto da indisponibilità puntuali;
 - non esistono altre prenotazioni sovrapposte;
 - l'utente è autorizzato a effettuare l'operazione.
 
----
+### Versionamento database
 
-# Roadmap di sviluppo
-
-La roadmap è pensata per far evolvere il progetto in modo progressivo. Le entity principali nascono insieme alla migration Flyway iniziale; eventuali nuove entity verranno introdotte con migration successive.
-
----
-
-## Step 1 - Base backend
-
-Obiettivo: stabilizzare la base backend e definire il modello dati iniziale.
-
-Attività:
-
-- rivedere struttura dei package;
-- separare controller, service, repository, DTO, mapper ed exception;
-- pulire eventuale codice generato o ridondante;
-- verificare configurazione Spring Security;
-- consolidare autenticazione JWT;
-- introdurre ruoli CUSTOMER, PROVIDER e ADMIN;
-- proteggere il CRUD utenti con ruolo ADMIN;
-- uniformare naming di classi, endpoint e DTO;
-- aggiungere gestione errori centralizzata con `@ControllerAdvice`;
-- introdurre validazione input con Bean Validation;
-- configurare Swagger / OpenAPI;
-- configurare Flyway per versionare lo schema database;
-- creare schema iniziale per User, Provider, OfferedService, Availability, Booking, Notification e AuditLog;
-- introdurre entity JPA coerenti con lo schema Flyway;
-- scrivere test sugli endpoint principali;
-- configurare profili Spring per sviluppo e test.
-
-Risultato atteso:
-
-- backend avviabile;
-- autenticazione funzionante;
-- CRUD utenti funzionante;
-- struttura progetto leggibile;
-- API documentate;
-- errori gestiti in modo uniforme;
-- database versionato con schema iniziale completo;
-- primi test automatici presenti.
+- Tool: Flyway.
+- Directory: `BE/saas.booking/src/main/resources/db/migration`.
+- Naming: `V{numero}__descrizione.sql`.
+- `V1__init_schema.sql`: schema iniziale consolidato.
+- Migration applicata: immutabile.
+- Nuove modifiche schema: nuova migration progressiva.
+- Entity JPA: allineate allo schema versionato.
+- Validazione test: Flyway attivo e Hibernate `ddl-auto=validate`.
 
 ---
 
-## Step 2 - API provider, servizi e booking
+## Pianificazione evolutiva
 
-Obiettivo: esporre provider e servizi già presenti nel modello dati e introdurre il CRUD booking base.
-
-Attività backend:
-
-- implementare CRUD provider;
-- implementare CRUD servizi;
-- aggiungere autorizzazioni per provider e admin.
-- implementare CRUD booking base collegato a Customer, Provider e OfferedService;
-- impedire prenotazioni sovrapposte sullo stesso provider.
-
-Risultato atteso:
-
-- il sistema distingue customer e provider;
-- un provider può pubblicare servizi;
-- le API espongono provider e servizi in modo coerente.
-- un customer può creare e gestire le proprie prenotazioni.
+La roadmap operativa è mantenuta in [roadmap.md](./roadmap.md).
 
 ---
 
-## Step 3 - Disponibilità e agenda
-
-Obiettivo: esporre la gestione reale degli slot prenotabili.
-
-Attività backend:
-
-- permettere al provider di configurare giorni e fasce orarie;
-- gestire ferie o blocchi temporanei;
-- esporre endpoint per consultare disponibilità;
-- validare sovrapposizioni o configurazioni incoerenti.
-
-Risultato atteso:
-
-- i provider possono configurare quando sono prenotabili;
-- le API permettono di consultare le disponibilità prima della prenotazione.
-
----
-
-## Step 4 - Prenotazione avanzata
-
-Obiettivo: rendere la prenotazione aderente alle regole di dominio.
-
-Attività backend:
-
-- calcolare automaticamente data/ora fine in base alla durata del servizio;
-- implementare transizioni di stato valide;
-- impedire doppie prenotazioni;
-- aggiungere controllo disponibilità;
-- aggiungere test sui casi principali e sui casi limite.
-
-Risultato atteso:
-
-- il flusso di prenotazione diventa il cuore dell'applicazione;
-- le regole principali sono protette da validazioni backend e test.
-
----
-
-## Step 5 - Ricerca e filtri
-
-Obiettivo: preparare API di ricerca provider efficienti e paginabili.
-
-Attività backend:
-
-- endpoint di ricerca provider;
-- filtro per categoria;
-- filtro per città;
-- filtro per disponibilità;
-- paginazione e ordinamento.
-
-Risultato atteso:
-
-- le API consentono ricerche realistiche sui provider;
-- il backend espone contratti pronti per la futura interfaccia utente.
-
----
-
-## Step 6 - Frontend React
-
-Obiettivo: costruire l'interfaccia utente dopo avere contratti backend principali stabili e prima degli strati architetturali.
-
-Attività:
-
-- inizializzare progetto React con Vite;
-- definire struttura cartelle per feature e componenti condivisi;
-- configurare routing;
-- creare layout principale;
-- creare pagina login;
-- creare pagina registrazione;
-- creare dashboard customer;
-- creare dashboard provider;
-- visualizzare provider, servizi e disponibilità;
-- implementare creazione e gestione prenotazioni;
-- aggiungere sezione admin;
-- configurare client HTTP per comunicare con il backend;
-- gestire salvataggio token JWT lato frontend.
-
-Risultato atteso:
-
-- frontend avviabile;
-- flussi principali collegati al backend;
-- interfaccia pronta per mostrare le successive evoluzioni architetturali.
-
----
-
-## Step 7 - Redis caching
-
-Obiettivo: introdurre caching solo dopo avere endpoint stabili e sensati da ottimizzare.
-
-Possibili casi d'uso:
-
-- cache lista provider;
-- cache dettaglio provider;
-- cache disponibilità provider.
-
-Attività:
-
-- configurare Redis in Docker Compose;
-- integrare Redis nel backend;
-- applicare caching sugli endpoint più letti;
-- gestire invalidazione cache quando cambiano provider, servizi o disponibilità;
-- documentare le scelte nel README.
-
-Risultato atteso:
-
-- Redis viene usato per un motivo concreto;
-- la cache non è introdotta come tecnologia isolata.
-
----
-
-## Step 8 - Kafka ed eventi asincroni
-
-Obiettivo: separare alcune operazioni secondarie dal flusso sincrono della prenotazione.
-
-Eventi previsti:
-
-```text
-BookingCreatedEvent
-BookingUpdatedEvent
-BookingCancelledEvent
-BookingConfirmedEvent
-BookingRejectedEvent
-```
-
-Consumer previsti:
-
-- Notification Consumer;
-- Audit Log Consumer.
-
-Attività:
-
-- configurare Kafka in Docker Compose;
-- pubblicare eventi dal dominio Booking;
-- creare consumer per notifiche;
-- creare consumer per audit log;
-- gestire retry o error handling di base;
-- testare il flusso end-to-end.
-
-Risultato atteso:
-
-- la creazione/modifica prenotazione genera eventi;
-- notifiche e audit log non sono accoppiati direttamente al service principale.
-
----
-
-## Step 9 - Containerizzazione completa
-
-Obiettivo: rendere il progetto facilmente avviabile da repository.
-
-Servizi previsti:
-
-- frontend React;
-- backend Spring Boot;
-- PostgreSQL;
-- Redis;
-- Kafka.
-
-Attività:
-
-- creare Dockerfile backend;
-- creare Dockerfile frontend;
-- completare Docker Compose;
-- configurare variabili ambiente;
-- documentare comandi di avvio;
-- verificare setup da clone pulito.
-
-Risultato atteso:
-
-- il progetto può essere avviato con pochi comandi;
-- il repository è più credibile e facile da valutare.
-
----
-
-## Step 10 - CI/CD e rifinitura finale
-
-Obiettivo: aggiungere una pipeline minima e rendere il progetto presentabile.
-
-Attività:
-
-- configurare GitHub Actions;
-- eseguire build backend;
-- eseguire test automatici;
-- eventualmente buildare immagini Docker;
-- migliorare README;
-- aggiungere screenshot frontend;
-- documentare architettura e scelte tecniche;
-- aggiungere esempi di request/response API;
-- completare Swagger.
-
-Risultato atteso:
-
-- progetto presentabile in colloquio;
-- repository leggibile;
-- pipeline minima funzionante.
-
-# Obiettivi tecnici del progetto
+## Obiettivi tecnici del progetto
 
 Il progetto è pensato per ripassare e dimostrare competenze su:
 

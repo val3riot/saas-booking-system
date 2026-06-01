@@ -14,6 +14,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import it.booking.common.ApiException;
+import it.booking.common.ErrorCode;
 import java.time.Instant;
 
 @Entity
@@ -51,6 +53,14 @@ public class Booking {
 
     @Column(nullable = false)
     private Instant updatedAt = Instant.now();
+
+    private Instant cancelledAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cancelled_by_user_id")
+    private AppUser cancelledBy;
+
+    private String cancellationReason;
 
     protected Booking() {
     }
@@ -100,8 +110,27 @@ public class Booking {
         return updatedAt;
     }
 
-    public void cancel() {
+    public Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public AppUser getCancelledBy() {
+        return cancelledBy;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public void cancel(AppUser cancelledBy, String reason) {
+        if (status != BookingStatus.PENDING && status != BookingStatus.CONFIRMED) {
+            throw new ApiException(ErrorCode.BOOKING_STATUS_TRANSITION_NOT_ALLOWED);
+        }
+        Instant now = Instant.now();
         this.status = BookingStatus.CANCELLED;
-        this.updatedAt = Instant.now();
+        this.cancelledAt = now;
+        this.cancelledBy = cancelledBy;
+        this.cancellationReason = reason;
+        this.updatedAt = now;
     }
 }

@@ -63,14 +63,7 @@ it.booking
 ```
 
 Le modifiche schema DB sono gestite da Flyway in `src/main/resources/db/migration`.
-In questa fase iniziale `V1__init_schema.sql` rappresenta il modello base pulito del progetto.
-
-Se esiste un database locale non allineato alla migration corrente, va resettato prima dell'avvio:
-
-```bash
-docker compose -f ../../infra/docker/dev/docker-compose.yml down -v
-docker compose -f ../../infra/docker/dev/docker-compose.yml up -d postgres
-```
+`V1__init_schema.sql` rappresenta il modello iniziale; le evoluzioni successive devono essere aggiunte con nuove migration versionate (`V2`, `V3`, ...), senza modificare migration già applicate.
 
 ## Endpoint iniziali
 
@@ -113,6 +106,14 @@ docker compose -f ../../infra/docker/dev/docker-compose.yml up -d postgres
 - `POST /api/providers/me/services/{serviceId}/availabilities/{availabilityId}/activate`
 - `POST /api/providers/me/services/{serviceId}/availabilities/{availabilityId}/deactivate`
 - `DELETE /api/providers/me/services/{serviceId}/availabilities/{availabilityId}`
+- `GET /api/providers/me/availability-exceptions`
+- `POST /api/providers/me/availability-exceptions`
+- `GET /api/providers/me/availability-exceptions/{exceptionId}`
+- `PUT /api/providers/me/availability-exceptions/{exceptionId}`
+- `POST /api/providers/me/availability-exceptions/{exceptionId}/activate`
+- `POST /api/providers/me/availability-exceptions/{exceptionId}/deactivate`
+- `DELETE /api/providers/me/availability-exceptions/{exceptionId}`
+- `GET /api/providers/me/agenda?from=&to=`
 - `GET /api/booking-slots?providerId=&serviceId=&from=&to=`
 - `GET /api/bookings`
 - `POST /api/bookings`
@@ -123,3 +124,21 @@ Gli endpoint `/api/users/**` e gli endpoint amministrativi `/api/providers/**` r
 Gli endpoint `/api/providers/me/**` richiedono ruolo `PROVIDER`.
 Gli endpoint `/api/bookings/**` richiedono ruolo `CUSTOMER`.
 Gli endpoint `/api/catalog/**` e `/api/booking-slots` richiedono autenticazione e restituiscono solo provider/servizi attivi.
+
+Le availability exception permettono al provider di bloccare fasce temporali puntuali:
+
+- `serviceId` valorizzato: blocco valido solo per quel servizio;
+- `serviceId` nullo: blocco valido per tutti i servizi del provider.
+
+Gli slot coperti da un blocco vengono restituiti come `BLOCKED` e non sono prenotabili.
+Un blocco attivo non può sovrapporsi a prenotazioni `PENDING` o `CONFIRMED`.
+
+Le prenotazioni possono essere cancellate dal customer tramite `POST /api/bookings/{bookingId}/cancel`.
+La cancellazione è permessa solo dagli stati `PENDING` e `CONFIRMED`; cancellazioni ripetute o stati finali restituiscono `BOOK_006`.
+Il payload può includere un motivo opzionale:
+
+```json
+{
+  "reason": "Cambio programma"
+}
+```

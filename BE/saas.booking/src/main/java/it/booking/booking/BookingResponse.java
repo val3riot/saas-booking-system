@@ -12,6 +12,9 @@ public record BookingResponse(
         Instant startsAt,
         Instant endsAt,
         BookingStatus status,
+        Instant cancelledAt,
+        Long cancelledByUserId,
+        String cancellationReason,
         Instant createdAt,
         Instant updatedAt
 ) {

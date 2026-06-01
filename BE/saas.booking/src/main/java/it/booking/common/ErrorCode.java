@@ -22,6 +22,7 @@ public enum ErrorCode {
     BOOKING_SLOT_UNAVAILABLE("BOOK_003", HttpStatus.CONFLICT, "Booking slot is not available"),
     PROVIDER_NOT_AVAILABLE("BOOK_004", HttpStatus.CONFLICT, "Provider is not available"),
     SERVICE_NOT_AVAILABLE("BOOK_005", HttpStatus.CONFLICT, "Service is not available"),
+    BOOKING_STATUS_TRANSITION_NOT_ALLOWED("BOOK_006", HttpStatus.CONFLICT, "Booking status transition is not allowed"),
     PROVIDER_NOT_FOUND("PROV_001", HttpStatus.NOT_FOUND, "Provider not found"),
     PROVIDER_ALREADY_EXISTS("PROV_002", HttpStatus.CONFLICT, "Provider already exists for user"),
     PROVIDER_USER_ROLE_REQUIRED("PROV_003", HttpStatus.BAD_REQUEST, "User must have PROVIDER role"),
@@ -30,6 +31,10 @@ public enum ErrorCode {
     AVAILABILITY_NOT_FOUND("AVAIL_001", HttpStatus.NOT_FOUND, "Availability not found"),
     INVALID_AVAILABILITY_INTERVAL("AVAIL_002", HttpStatus.BAD_REQUEST, "endTime must be after startTime"),
     AVAILABILITY_OVERLAP("AVAIL_003", HttpStatus.CONFLICT, "Availability overlaps an existing active slot"),
+    AVAILABILITY_EXCEPTION_NOT_FOUND("AVEX_001", HttpStatus.NOT_FOUND, "Availability exception not found"),
+    INVALID_AVAILABILITY_EXCEPTION_INTERVAL("AVEX_002", HttpStatus.BAD_REQUEST, "endsAt must be after startsAt"),
+    AVAILABILITY_EXCEPTION_OVERLAP("AVEX_003", HttpStatus.CONFLICT, "Availability exception overlaps an existing active exception"),
+    AVAILABILITY_EXCEPTION_BOOKING_CONFLICT("AVEX_004", HttpStatus.CONFLICT, "Availability exception overlaps an active booking"),
     USER_NOT_FOUND("USER_001", HttpStatus.NOT_FOUND, "User not found"),
     RESOURCE_NOT_FOUND("RES_001", HttpStatus.NOT_FOUND, "Resource not found"),
     INTERNAL_ERROR("SYS_001", HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error");

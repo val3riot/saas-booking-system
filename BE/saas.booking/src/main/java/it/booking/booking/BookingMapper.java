@@ -16,6 +16,9 @@ public class BookingMapper {
                 booking.getStartsAt(),
                 booking.getEndsAt(),
                 booking.getStatus(),
+                booking.getCancelledAt(),
+                booking.getCancelledBy() == null ? null : booking.getCancelledBy().getId(),
+                booking.getCancellationReason(),
                 booking.getCreatedAt(),
                 booking.getUpdatedAt()
         );

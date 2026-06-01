@@ -1,6 +1,7 @@
 package it.booking.booking;
 
 import it.booking.availability.Availability;
+import it.booking.availability.AvailabilityExceptionRepository;
 import it.booking.availability.AvailabilityRepository;
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
@@ -31,6 +32,7 @@ public class BookingService {
     private final ProviderRepository providers;
     private final OfferedServiceRepository offeredServices;
     private final AvailabilityRepository availabilities;
+    private final AvailabilityExceptionRepository availabilityExceptions;
     private final BookingMapper bookingMapper;
 
     public BookingService(
@@ -39,6 +41,7 @@ public class BookingService {
             ProviderRepository providers,
             OfferedServiceRepository offeredServices,
             AvailabilityRepository availabilities,
+            AvailabilityExceptionRepository availabilityExceptions,
             BookingMapper bookingMapper
     ) {
         this.bookings = bookings;
@@ -46,6 +49,7 @@ public class BookingService {
         this.providers = providers;
         this.offeredServices = offeredServices;
         this.availabilities = availabilities;
+        this.availabilityExceptions = availabilityExceptions;
         this.bookingMapper = bookingMapper;
     }
 
@@ -78,6 +82,7 @@ public class BookingService {
         Instant startsAt = request.startsAt();
         Instant endsAt = startsAt.plusSeconds((long) service.getDurationMinutes() * 60);
         validateAvailability(provider.getId(), service.getId(), service.getDurationMinutes(), startsAt, endsAt);
+        validateNoAvailabilityException(provider.getId(), service.getId(), startsAt, endsAt);
         validateNoBookingOverlap(provider.getId(), startsAt, endsAt);
 
         Booking booking = bookings.save(new Booking(customer, provider, service, startsAt, endsAt));
@@ -85,10 +90,13 @@ public class BookingService {
     }
 
     @Transactional
-    public void cancelForCurrentCustomer(Long customerId, Long bookingId) {
+    public void cancelForCurrentCustomer(Long customerId, Long bookingId, CancelBookingRequest request) {
+        AppUser customer = users.findById(customerId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
         Booking booking = bookings.findByIdAndCustomerId(bookingId, customerId)
                 .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
-        booking.cancel();
+        String reason = request == null ? null : request.reason();
+        booking.cancel(customer, reason);
     }
 
     private void validateProviderAndService(Provider provider, OfferedService service) {
@@ -140,6 +148,12 @@ public class BookingService {
                 endsAt,
                 startsAt
         )) {
+            throw new ApiException(ErrorCode.BOOKING_SLOT_UNAVAILABLE);
+        }
+    }
+
+    private void validateNoAvailabilityException(Long providerId, Long serviceId, Instant startsAt, Instant endsAt) {
+        if (availabilityExceptions.existsActiveBlocking(providerId, serviceId, startsAt, endsAt)) {
             throw new ApiException(ErrorCode.BOOKING_SLOT_UNAVAILABLE);
         }
     }
