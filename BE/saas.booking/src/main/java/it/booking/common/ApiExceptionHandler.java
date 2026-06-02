@@ -58,7 +58,7 @@ public class ApiExceptionHandler {
         Map<String, ApiFieldError> fields = new LinkedHashMap<>();
         ex.getConstraintViolations().forEach(violation -> {
             ErrorCode code = resolveConstraintCode(violation.getConstraintDescriptor().getAnnotation().annotationType().getSimpleName());
-            fields.putIfAbsent(violation.getPropertyPath().toString(), new ApiFieldError(code.code(), code.defaultMessage()));
+            fields.putIfAbsent(fieldName(violation.getPropertyPath().toString()), new ApiFieldError(code.code(), code.defaultMessage()));
         });
         log.warn("Constraint validation failed on {}: code={}, status={}, fields={}",
                 request.getRequestURI(),
@@ -240,5 +240,13 @@ public class ApiExceptionHandler {
                 .map(JsonMappingException.Reference::getFieldName)
                 .filter(name -> name != null && !name.isBlank())
                 .findFirst();
+    }
+
+    private String fieldName(String propertyPath) {
+        int separatorIndex = propertyPath.lastIndexOf('.');
+        if (separatorIndex < 0 || separatorIndex == propertyPath.length() - 1) {
+            return propertyPath;
+        }
+        return propertyPath.substring(separatorIndex + 1);
     }
 }

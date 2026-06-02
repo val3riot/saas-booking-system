@@ -2,9 +2,15 @@ package it.booking.catalog;
 
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
+import it.booking.common.PageResponse;
+import it.booking.common.TextUtils;
 import it.booking.offering.OfferedServiceRepository;
 import it.booking.provider.ProviderRepository;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +37,32 @@ public class CatalogService {
                 .stream()
                 .map(catalogMapper::toProviderResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CatalogProviderResponse> searchProviders(
+            String query,
+            String category,
+            String city,
+            LocalDate availableOn,
+            int page,
+            int size,
+            CatalogProviderSort sort,
+            Sort.Direction direction
+    ) {
+        Short dayOfWeek = availableOn == null ? null : (short) availableOn.getDayOfWeek().getValue();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(direction, sort.property()));
+        Page<CatalogProviderResponse> result = providers.findAll(
+                        CatalogProviderSpecifications.search(
+                                TextUtils.trimNullable(query),
+                                TextUtils.trimNullable(category),
+                                TextUtils.trimNullable(city),
+                                dayOfWeek
+                        ),
+                        pageRequest
+                )
+                .map(catalogMapper::toProviderResponse);
+        return PageResponse.from(result);
     }
 
     @Transactional(readOnly = true)

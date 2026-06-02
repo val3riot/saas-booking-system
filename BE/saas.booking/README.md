@@ -72,6 +72,7 @@ Le modifiche schema DB sono gestite da Flyway in `src/main/resources/db/migratio
 - `POST /api/auth/register/provider`
 - `POST /api/auth/login`
 - `GET /api/catalog/providers`
+- `GET /api/catalog/providers/search?query=&category=&city=&availableOn=&page=&size=&sort=&direction=`
 - `GET /api/catalog/providers/{providerId}`
 - `GET /api/catalog/providers/{providerId}/services`
 - `GET /api/catalog/providers/{providerId}/services/{serviceId}`
@@ -129,6 +130,18 @@ Gli endpoint `/api/users/**` e gli endpoint amministrativi `/api/providers/**` r
 Gli endpoint `/api/providers/me/**` richiedono ruolo `PROVIDER`.
 Gli endpoint `/api/bookings/**` richiedono ruolo `CUSTOMER`.
 Gli endpoint `/api/catalog/**` e `/api/booking-slots` richiedono autenticazione e restituiscono solo provider/servizi attivi.
+
+La ricerca catalogo provider supporta:
+
+- `query`: ricerca su nome attività e descrizione;
+- `category`: filtro esatto case-insensitive sulla categoria;
+- `city`: filtro esatto case-insensitive sulla città;
+- `availableOn`: filtro per provider con almeno una disponibilità attiva nel giorno richiesto;
+- `page` e `size`: paginazione, con size massima 100;
+- `sort`: `BUSINESS_NAME`, `CITY`, `CATEGORY`;
+- `direction`: `ASC` o `DESC`.
+
+La risposta paginata usa un contratto stabile con `content`, `page`, `size`, `totalElements`, `totalPages`, `first` e `last`.
 
 Le availability exception permettono al provider di bloccare fasce temporali puntuali:
 
