@@ -7,6 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.booking.audit.AuditEntityType;
+import it.booking.audit.AuditEventType;
+import it.booking.audit.AuditLogRepository;
 import it.booking.auth.AuthRequest;
 import it.booking.auth.AuthResponse;
 import it.booking.availability.Availability;
@@ -64,6 +67,9 @@ class BookingControllerIntegrationTest {
     private BookingRepository bookings;
 
     @Autowired
+    private AuditLogRepository auditLogs;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Test
@@ -100,7 +106,7 @@ class BookingControllerIntegrationTest {
                 .andExpect(jsonPath("$.providerId").value(provider.provider().getId()))
                 .andExpect(jsonPath("$.serviceId").value(provider.service().getId()))
                 .andExpect(jsonPath("$.serviceName").value("Prima visita"))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.status").value("PENDING"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -127,6 +133,9 @@ class BookingControllerIntegrationTest {
         assertThat(cancelled.getCancelledAt()).isNotNull();
         assertThat(cancelled.getCancelledBy().getId()).isEqualTo(created.customerId());
         assertThat(cancelled.getCancellationReason()).isNull();
+        assertThat(auditLogs.findAllByEntityTypeAndEntityIdOrderByCreatedAtAsc(AuditEntityType.BOOKING, created.id()))
+                .extracting("eventType")
+                .containsExactly(AuditEventType.BOOKING_CREATED, AuditEventType.BOOKING_CANCELLED);
     }
 
     @Test
@@ -443,6 +452,88 @@ class BookingControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].startsAt").value(startsAt.toString()));
     }
 
+    @Test
+    void providerCanConfirmRejectAndCancelReceivedBookings() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-workflow-provider@example.com");
+        String providerToken = login(provider.user().getEmail());
+        String firstCustomerToken = createCustomerAndLogin("booking-workflow-first@example.com");
+        String secondCustomerToken = createCustomerAndLogin("booking-workflow-second@example.com");
+        String thirdCustomerToken = createCustomerAndLogin("booking-workflow-third@example.com");
+
+        BookingResponse first = createBooking(firstCustomerToken, provider, nextSlot(DayOfWeek.MONDAY, LocalTime.of(9, 0)));
+        BookingResponse second = createBooking(secondCustomerToken, provider, nextSlot(DayOfWeek.MONDAY, LocalTime.of(10, 0)));
+        BookingResponse third = createBooking(thirdCustomerToken, provider, nextSlot(DayOfWeek.MONDAY, LocalTime.of(11, 0)));
+
+        mockMvc.perform(get("/api/providers/me/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + providerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(first.id()));
+
+        mockMvc.perform(get("/api/providers/me/bookings/{bookingId}", first.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + providerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+
+        mockMvc.perform(post("/api/providers/me/bookings/{bookingId}/confirm", first.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + providerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        mockMvc.perform(post("/api/providers/me/bookings/{bookingId}/reject", second.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + providerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RejectBookingRequest("Slot non disponibile"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        mockMvc.perform(post("/api/providers/me/bookings/{bookingId}/cancel", third.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + providerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CancelBookingRequest("Imprevisto provider"))))
+                .andExpect(status().isNoContent());
+
+        Booking cancelled = bookings.findById(third.id()).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(cancelled.getCancelledBy().getId()).isEqualTo(provider.user().getId());
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Imprevisto provider");
+
+        assertThat(auditLogs.findAllByEntityTypeAndEntityIdOrderByCreatedAtAsc(AuditEntityType.BOOKING, first.id()))
+                .extracting("eventType")
+                .containsExactly(AuditEventType.BOOKING_CREATED, AuditEventType.BOOKING_CONFIRMED);
+        assertThat(auditLogs.findAllByEntityTypeAndEntityIdOrderByCreatedAtAsc(AuditEntityType.BOOKING, second.id()))
+                .extracting("eventType")
+                .containsExactly(AuditEventType.BOOKING_CREATED, AuditEventType.BOOKING_REJECTED);
+        assertThat(auditLogs.findAllByEntityTypeAndEntityIdOrderByCreatedAtAsc(AuditEntityType.BOOKING, third.id()))
+                .extracting("eventType")
+                .containsExactly(AuditEventType.BOOKING_CREATED, AuditEventType.BOOKING_CANCELLED);
+    }
+
+    @Test
+    void providerBookingWorkflowRejectsInvalidTransitionsAndForeignBookings() throws Exception {
+        ProviderFixture owner = createProviderFixture("booking-workflow-owner@example.com");
+        ProviderFixture otherProvider = createProviderFixture("booking-workflow-other-provider@example.com");
+        String ownerProviderToken = login(owner.user().getEmail());
+        String otherProviderToken = login(otherProvider.user().getEmail());
+        String customerToken = createCustomerAndLogin("booking-workflow-owner-customer@example.com");
+
+        BookingResponse booking = createBooking(customerToken, owner, nextSlot(DayOfWeek.MONDAY, LocalTime.of(9, 0)));
+
+        mockMvc.perform(post("/api/providers/me/bookings/{bookingId}/confirm", booking.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + otherProviderToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("BOOK_001"));
+
+        mockMvc.perform(post("/api/providers/me/bookings/{bookingId}/confirm", booking.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ownerProviderToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        mockMvc.perform(post("/api/providers/me/bookings/{bookingId}/reject", booking.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ownerProviderToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_006"));
+    }
+
     private ProviderFixture createProviderFixture(String email) {
         AppUser user = createUser(email, UserRole.PROVIDER);
         Provider provider = providers.save(new Provider(user, "Studio Booking", null, "wellness", "Milano", null));
@@ -466,6 +557,23 @@ class BookingControllerIntegrationTest {
                 .getContentAsString();
 
         return objectMapper.readValue(response, AuthResponse.class).token();
+    }
+
+    private BookingResponse createBooking(String customerToken, ProviderFixture provider, Instant startsAt) throws Exception {
+        String response = mockMvc.perform(post("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateBookingRequest(
+                                provider.provider().getId(),
+                                provider.service().getId(),
+                                startsAt
+                        ))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readValue(response, BookingResponse.class);
     }
 
     private AppUser createUser(String email, UserRole role) {

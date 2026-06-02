@@ -226,9 +226,13 @@ Rappresenta la registrazione degli eventi rilevanti del sistema.
 Esempi:
 
 - creazione prenotazione;
+- conferma prenotazione;
+- rifiuto prenotazione;
 - annullamento prenotazione;
 - modifica disponibilità;
 - cambio stato prenotazione.
+
+L'audit log ha finalità di tracciamento business e accountability. Non sostituisce logging tecnico, metriche o tracing applicativo.
 
 ---
 
@@ -319,6 +323,28 @@ BLOCKED
 
 Gli stati `PENDING` e `CONFIRMED` bloccano lo slot. Gli stati `CANCELLED`, `REJECTED` e `COMPLETED` non devono impedire nuove prenotazioni sullo stesso intervallo.
 
+### Audit business
+
+Gli eventi di dominio rilevanti devono essere tracciati in `audit_logs`.
+
+Eventi booking principali:
+
+```text
+BOOKING_CREATED
+BOOKING_CONFIRMED
+BOOKING_REJECTED
+BOOKING_CANCELLED
+```
+
+Ogni record di audit contiene:
+
+- utente attore;
+- tipo evento;
+- tipo entità;
+- id entità;
+- payload descrittivo;
+- timestamp.
+
 ### Validità delle disponibilità
 
 Una prenotazione può essere creata solo se:
@@ -340,6 +366,8 @@ Una prenotazione può essere creata solo se:
 - Nuove modifiche schema: nuova migration progressiva.
 - Entity JPA: allineate allo schema versionato.
 - Validazione test: Flyway attivo e Hibernate `ddl-auto=validate`.
+- Tipologiche di dominio: rappresentate nel codice con enum o value object dedicati.
+- Tipologiche persistite: vincolate su database tramite lookup table o check constraint.
 
 ---
 

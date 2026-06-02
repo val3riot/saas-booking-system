@@ -1,5 +1,6 @@
 package it.booking.booking;
 
+import it.booking.audit.AuditService;
 import it.booking.availability.Availability;
 import it.booking.availability.AvailabilityExceptionRepository;
 import it.booking.availability.AvailabilityRepository;
@@ -22,11 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BookingService {
 
-    private static final List<BookingStatus> BLOCKING_STATUSES = List.of(
-            BookingStatus.PENDING,
-            BookingStatus.CONFIRMED
-    );
-
     private final BookingRepository bookings;
     private final AppUserRepository users;
     private final ProviderRepository providers;
@@ -34,6 +30,7 @@ public class BookingService {
     private final AvailabilityRepository availabilities;
     private final AvailabilityExceptionRepository availabilityExceptions;
     private final BookingMapper bookingMapper;
+    private final AuditService auditService;
 
     public BookingService(
             BookingRepository bookings,
@@ -42,7 +39,8 @@ public class BookingService {
             OfferedServiceRepository offeredServices,
             AvailabilityRepository availabilities,
             AvailabilityExceptionRepository availabilityExceptions,
-            BookingMapper bookingMapper
+            BookingMapper bookingMapper,
+            AuditService auditService
     ) {
         this.bookings = bookings;
         this.users = users;
@@ -51,6 +49,7 @@ public class BookingService {
         this.availabilities = availabilities;
         this.availabilityExceptions = availabilityExceptions;
         this.bookingMapper = bookingMapper;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -86,6 +85,7 @@ public class BookingService {
         validateNoBookingOverlap(provider.getId(), startsAt, endsAt);
 
         Booking booking = bookings.save(new Booking(customer, provider, service, startsAt, endsAt));
+        auditService.bookingCreated(customer, booking);
         return bookingMapper.toResponse(booking);
     }
 
@@ -97,6 +97,55 @@ public class BookingService {
                 .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
         String reason = request == null ? null : request.reason();
         booking.cancel(customer, reason);
+        auditService.bookingCancelled(customer, booking, reason);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BookingResponse> listForCurrentProvider(Long providerUserId) {
+        Provider provider = providerForUser(providerUserId);
+        return bookings.findAllByProviderIdOrderByStartsAtAsc(provider.getId())
+                .stream()
+                .map(bookingMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BookingResponse getForCurrentProvider(Long providerUserId, Long bookingId) {
+        Provider provider = providerForUser(providerUserId);
+        return bookings.findByIdAndProviderId(bookingId, provider.getId())
+                .map(bookingMapper::toResponse)
+                .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
+    }
+
+    @Transactional
+    public BookingResponse confirmForCurrentProvider(Long providerUserId, Long bookingId) {
+        Provider provider = providerForUser(providerUserId);
+        Booking booking = bookings.findByIdAndProviderId(bookingId, provider.getId())
+                .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
+        booking.confirm();
+        auditService.bookingConfirmed(provider.getUser(), booking);
+        return bookingMapper.toResponse(booking);
+    }
+
+    @Transactional
+    public BookingResponse rejectForCurrentProvider(Long providerUserId, Long bookingId, RejectBookingRequest request) {
+        Provider provider = providerForUser(providerUserId);
+        Booking booking = bookings.findByIdAndProviderId(bookingId, provider.getId())
+                .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
+        String reason = request == null ? null : request.reason();
+        booking.reject();
+        auditService.bookingRejected(provider.getUser(), booking, reason);
+        return bookingMapper.toResponse(booking);
+    }
+
+    @Transactional
+    public void cancelForCurrentProvider(Long providerUserId, Long bookingId, CancelBookingRequest request) {
+        Provider provider = providerForUser(providerUserId);
+        Booking booking = bookings.findByIdAndProviderId(bookingId, provider.getId())
+                .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
+        String reason = request == null ? null : request.reason();
+        booking.cancel(provider.getUser(), reason);
+        auditService.bookingCancelled(provider.getUser(), booking, reason);
     }
 
     private void validateProviderAndService(Provider provider, OfferedService service) {
@@ -144,7 +193,7 @@ public class BookingService {
     private void validateNoBookingOverlap(Long providerId, Instant startsAt, Instant endsAt) {
         if (bookings.existsByProviderIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThan(
                 providerId,
-                BLOCKING_STATUSES,
+                BookingStatus.blockingStatuses(),
                 endsAt,
                 startsAt
         )) {
@@ -156,5 +205,10 @@ public class BookingService {
         if (availabilityExceptions.existsActiveBlocking(providerId, serviceId, startsAt, endsAt)) {
             throw new ApiException(ErrorCode.BOOKING_SLOT_UNAVAILABLE);
         }
+    }
+
+    private Provider providerForUser(Long userId) {
+        return providers.findByUserId(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.PROVIDER_NOT_FOUND));
     }
 }

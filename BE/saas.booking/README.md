@@ -114,6 +114,11 @@ Le modifiche schema DB sono gestite da Flyway in `src/main/resources/db/migratio
 - `POST /api/providers/me/availability-exceptions/{exceptionId}/deactivate`
 - `DELETE /api/providers/me/availability-exceptions/{exceptionId}`
 - `GET /api/providers/me/agenda?from=&to=`
+- `GET /api/providers/me/bookings`
+- `GET /api/providers/me/bookings/{bookingId}`
+- `POST /api/providers/me/bookings/{bookingId}/confirm`
+- `POST /api/providers/me/bookings/{bookingId}/reject`
+- `POST /api/providers/me/bookings/{bookingId}/cancel`
 - `GET /api/booking-slots?providerId=&serviceId=&from=&to=`
 - `GET /api/bookings`
 - `POST /api/bookings`
@@ -133,6 +138,10 @@ Le availability exception permettono al provider di bloccare fasce temporali pun
 Gli slot coperti da un blocco vengono restituiti come `BLOCKED` e non sono prenotabili.
 Un blocco attivo non può sovrapporsi a prenotazioni `PENDING` o `CONFIRMED`.
 
+Le prenotazioni create dal customer nascono in stato `PENDING`.
+Il provider può confermare o rifiutare le prenotazioni ricevute.
+Gli stati `PENDING` e `CONFIRMED` bloccano lo slot; gli stati `REJECTED` e `CANCELLED` liberano lo slot.
+
 Le prenotazioni possono essere cancellate dal customer tramite `POST /api/bookings/{bookingId}/cancel`.
 La cancellazione è permessa solo dagli stati `PENDING` e `CONFIRMED`; cancellazioni ripetute o stati finali restituiscono `BOOK_006`.
 Il payload può includere un motivo opzionale:
@@ -142,3 +151,13 @@ Il payload può includere un motivo opzionale:
   "reason": "Cambio programma"
 }
 ```
+
+La tabella `audit_logs` traccia gli eventi business principali del dominio booking:
+
+- `BOOKING_CREATED`;
+- `BOOKING_CONFIRMED`;
+- `BOOKING_REJECTED`;
+- `BOOKING_CANCELLED`.
+
+L'audit trail registra actor, entity, entity id, event type, payload e timestamp. Non sostituisce i log tecnici applicativi.
+Le tipologiche dell'audit sono modellate nel codice tramite enum e vincolate a database tramite check constraint Flyway.

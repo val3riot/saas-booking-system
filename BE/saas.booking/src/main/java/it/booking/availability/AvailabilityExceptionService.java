@@ -61,7 +61,7 @@ public class AvailabilityExceptionService {
         OfferedService service = serviceForProvider(request.serviceId(), provider.getId());
         validateInterval(request.startsAt(), request.endsAt());
         validateNoOverlap(provider.getId(), request.serviceId(), null, request.startsAt(), request.endsAt());
-        validateNoActiveBooking(provider.getId(), request.startsAt(), request.endsAt());
+        validateNoActiveBooking(provider.getId(), request.serviceId(), request.startsAt(), request.endsAt());
 
         AvailabilityException exception = exceptions.save(new AvailabilityException(
                 provider,
@@ -87,7 +87,7 @@ public class AvailabilityExceptionService {
 
         if (request.active()) {
             validateNoOverlap(provider.getId(), request.serviceId(), exceptionId, request.startsAt(), request.endsAt());
-            validateNoActiveBooking(provider.getId(), request.startsAt(), request.endsAt());
+            validateNoActiveBooking(provider.getId(), request.serviceId(), request.startsAt(), request.endsAt());
         }
 
         exception.update(
@@ -107,7 +107,7 @@ public class AvailabilityExceptionService {
                 .orElseThrow(() -> new ApiException(ErrorCode.AVAILABILITY_EXCEPTION_NOT_FOUND));
         Long serviceId = exception.getService() == null ? null : exception.getService().getId();
         validateNoOverlap(provider.getId(), serviceId, exceptionId, exception.getStartsAt(), exception.getEndsAt());
-        validateNoActiveBooking(provider.getId(), exception.getStartsAt(), exception.getEndsAt());
+        validateNoActiveBooking(provider.getId(), serviceId, exception.getStartsAt(), exception.getEndsAt());
         exception.activate();
     }
 
@@ -154,13 +154,22 @@ public class AvailabilityExceptionService {
         }
     }
 
-    private void validateNoActiveBooking(Long providerId, Instant startsAt, Instant endsAt) {
-        if (bookings.existsByProviderIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThan(
-                providerId,
-                List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED),
-                endsAt,
-                startsAt
-        )) {
+    private void validateNoActiveBooking(Long providerId, Long serviceId, Instant startsAt, Instant endsAt) {
+        boolean exists = serviceId == null
+                ? bookings.existsByProviderIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThan(
+                        providerId,
+                        BookingStatus.blockingStatuses(),
+                        endsAt,
+                        startsAt
+                )
+                : bookings.existsByProviderIdAndServiceIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThan(
+                        providerId,
+                        serviceId,
+                        BookingStatus.blockingStatuses(),
+                        endsAt,
+                        startsAt
+                );
+        if (exists) {
             throw new ApiException(ErrorCode.AVAILABILITY_EXCEPTION_BOOKING_CONFLICT);
         }
     }

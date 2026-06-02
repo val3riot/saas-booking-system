@@ -46,7 +46,7 @@ public class Booking {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private BookingStatus status = BookingStatus.CONFIRMED;
+    private BookingStatus status = BookingStatus.PENDING;
 
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
@@ -71,7 +71,7 @@ public class Booking {
         this.service = service;
         this.startsAt = startsAt;
         this.endsAt = endsAt;
-        this.status = BookingStatus.CONFIRMED;
+        this.status = BookingStatus.PENDING;
     }
 
     public Long getId() {
@@ -120,6 +120,22 @@ public class Booking {
 
     public String getCancellationReason() {
         return cancellationReason;
+    }
+
+    public void confirm() {
+        if (status != BookingStatus.PENDING) {
+            throw new ApiException(ErrorCode.BOOKING_STATUS_TRANSITION_NOT_ALLOWED);
+        }
+        this.status = BookingStatus.CONFIRMED;
+        this.updatedAt = Instant.now();
+    }
+
+    public void reject() {
+        if (status != BookingStatus.PENDING) {
+            throw new ApiException(ErrorCode.BOOKING_STATUS_TRANSITION_NOT_ALLOWED);
+        }
+        this.status = BookingStatus.REJECTED;
+        this.updatedAt = Instant.now();
     }
 
     public void cancel(AppUser cancelledBy, String reason) {

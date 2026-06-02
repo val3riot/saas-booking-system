@@ -22,11 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BookingSlotService {
 
-    private static final List<BookingStatus> BLOCKING_STATUSES = List.of(
-            BookingStatus.PENDING,
-            BookingStatus.CONFIRMED
-    );
-
     private final ProviderRepository providers;
     private final OfferedServiceRepository offeredServices;
     private final AvailabilityRepository availabilities;
@@ -68,7 +63,7 @@ public class BookingSlotService {
         List<Booking> bookedSlots = bookings
                 .findAllByProviderIdAndStatusInAndStartsAtLessThanAndEndsAtGreaterThanOrderByStartsAtAsc(
                         providerId,
-                        BLOCKING_STATUSES,
+                        BookingStatus.blockingStatuses(),
                         rangeEnd,
                         rangeStart
                 );

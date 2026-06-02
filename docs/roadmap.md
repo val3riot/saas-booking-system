@@ -103,6 +103,8 @@ Attività backend:
 - implementare transizioni di stato valide;
 - introdurre eventuale modello a conferma manuale con stato iniziale `PENDING`;
 - permettere al provider di confermare o rifiutare prenotazioni se il modello non è a conferma automatica;
+- esporre endpoint provider per gestire le prenotazioni ricevute;
+- tracciare gli eventi principali in audit log;
 - aggiungere modifica prenotazione o richiesta di ripianificazione;
 - rafforzare test su casi concorrenti;
 - aggiungere test sui casi principali e sui casi limite.

@@ -3,6 +3,8 @@ package it.booking.audit;
 import it.booking.user.AppUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,10 +27,12 @@ public class AuditLog {
     private AppUser actor;
 
     @Column(nullable = false)
-    private String eventType;
+    @Enumerated(EnumType.STRING)
+    private AuditEventType eventType;
 
     @Column(nullable = false)
-    private String entityType;
+    @Enumerated(EnumType.STRING)
+    private AuditEntityType entityType;
 
     private Long entityId;
 
@@ -41,7 +45,7 @@ public class AuditLog {
     protected AuditLog() {
     }
 
-    public AuditLog(AppUser actor, String eventType, String entityType, Long entityId, String payload) {
+    public AuditLog(AppUser actor, AuditEventType eventType, AuditEntityType entityType, Long entityId, String payload) {
         this.actor = actor;
         this.eventType = eventType;
         this.entityType = entityType;
@@ -57,11 +61,11 @@ public class AuditLog {
         return actor;
     }
 
-    public String getEventType() {
+    public AuditEventType getEventType() {
         return eventType;
     }
 
-    public String getEntityType() {
+    public AuditEntityType getEntityType() {
         return entityType;
     }
 
