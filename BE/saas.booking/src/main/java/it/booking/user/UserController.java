@@ -2,11 +2,13 @@ package it.booking.user;
 
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import it.booking.auth.AuthenticatedUser;
 import it.booking.config.OpenApiConfig;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,8 +46,12 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    UserResponse update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
-        return userService.update(id, request);
+    UserResponse update(
+            @AuthenticationPrincipal AuthenticatedUser admin,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUserRequest request
+    ) {
+        return userService.update(id, request, admin.id());
     }
 
     @PostMapping("/{id}/enable")
@@ -57,15 +63,15 @@ public class UserController {
 
     @PostMapping("/{id}/disable")
     @ApiResponse(responseCode = "204", description = "User disabled")
-    ResponseEntity<Void> disable(@PathVariable Long id) {
-        userService.disable(id);
+    ResponseEntity<Void> disable(@AuthenticationPrincipal AuthenticatedUser admin, @PathVariable Long id) {
+        userService.disable(id, admin.id());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")
     @ApiResponse(responseCode = "204", description = "User disabled")
-    ResponseEntity<Void> delete(@PathVariable Long id) {
-        userService.delete(id);
+    ResponseEntity<Void> delete(@AuthenticationPrincipal AuthenticatedUser admin, @PathVariable Long id) {
+        userService.delete(id, admin.id());
         return ResponseEntity.noContent().build();
     }
 }

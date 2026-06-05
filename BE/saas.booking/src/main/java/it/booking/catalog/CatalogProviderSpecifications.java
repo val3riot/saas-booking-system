@@ -29,6 +29,7 @@ final class CatalogProviderSpecifications {
 
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.isTrue(provider.get("active")));
+            predicates.add(criteriaBuilder.isTrue(provider.get("user").get("enabled")));
 
             if (query != null) {
                 String searchPattern = likePattern(query);
@@ -52,15 +53,13 @@ final class CatalogProviderSpecifications {
                 ));
             }
 
-            if (dayOfWeek != null) {
-                predicates.add(hasActiveAvailabilityOnDay(provider, dayOfWeek, criteriaQuery.subquery(Long.class), criteriaBuilder));
-            }
+            predicates.add(hasBookableService(provider, dayOfWeek, criteriaQuery.subquery(Long.class), criteriaBuilder));
 
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
     }
 
-    private static Predicate hasActiveAvailabilityOnDay(
+    private static Predicate hasBookableService(
             Root<Provider> provider,
             Short dayOfWeek,
             Subquery<Long> subquery,
@@ -69,13 +68,17 @@ final class CatalogProviderSpecifications {
         Root<Availability> availability = subquery.from(Availability.class);
         Join<Availability, OfferedService> service = availability.join("service");
 
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(criteriaBuilder.equal(availability.get("provider"), provider));
+        predicates.add(criteriaBuilder.isTrue(availability.get("active")));
+        predicates.add(criteriaBuilder.isTrue(service.get("active")));
+
+        if (dayOfWeek != null) {
+            predicates.add(criteriaBuilder.equal(availability.get("dayOfWeek"), dayOfWeek));
+        }
+
         subquery.select(availability.get("id"))
-                .where(
-                        criteriaBuilder.equal(availability.get("provider"), provider),
-                        criteriaBuilder.isTrue(availability.get("active")),
-                        criteriaBuilder.isTrue(service.get("active")),
-                        criteriaBuilder.equal(availability.get("dayOfWeek"), dayOfWeek)
-                );
+                .where(criteriaBuilder.and(predicates.toArray(Predicate[]::new)));
 
         return criteriaBuilder.exists(subquery);
     }

@@ -2,6 +2,8 @@ package it.booking.config;
 
 import it.booking.auth.AuthenticatedUser;
 import it.booking.auth.JwtService;
+import it.booking.user.AppUser;
+import it.booking.user.AppUserRepository;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -23,9 +25,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtService jwtService;
+    private final AppUserRepository users;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, AppUserRepository users) {
         this.jwtService = jwtService;
+        this.users = users;
     }
 
     @Override
@@ -38,10 +42,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             try {
                 AuthenticatedUser user = jwtService.parseToken(header.substring(7));
+                AppUser persistedUser = users.findById(user.id())
+                        .filter(AppUser::isEnabled)
+                        .orElse(null);
+                if (persistedUser == null) {
+                    SecurityContextHolder.clearContext();
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
+                AuthenticatedUser currentUser = new AuthenticatedUser(
+                        persistedUser.getId(),
+                        persistedUser.getEmail(),
+                        persistedUser.getRole()
+                );
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        user,
+                        currentUser,
                         null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + user.role().name()))
+                        List.of(new SimpleGrantedAuthority("ROLE_" + currentUser.role().name()))
                 );
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (JwtException | IllegalArgumentException ex) {

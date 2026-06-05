@@ -89,9 +89,9 @@ class ProviderControllerIntegrationTest {
     @Test
     void adminCanManageProviders() throws Exception {
         String adminToken = createAdminAndLogin("admin-providers@example.com");
-        AppUser providerUser = createUser("provider-owner@example.com", UserRole.PROVIDER);
         CreateProviderRequest createRequest = new CreateProviderRequest(
-                providerUser.getId(),
+                "provider-owner@example.com",
+                "Password1!",
                 "Studio Fisio",
                 "Fisioterapia e riabilitazione",
                 "wellness",
@@ -105,13 +105,15 @@ class ProviderControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.businessName").value("Studio Fisio"))
-                .andExpect(jsonPath("$.userId").value(providerUser.getId()))
                 .andExpect(jsonPath("$.active").value(true))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
         ProviderResponse created = objectMapper.readValue(createResponse, ProviderResponse.class);
+        AppUser providerUser = users.findByEmail("provider-owner@example.com").orElseThrow();
+        assertThat(providerUser.getRole()).isEqualTo(UserRole.PROVIDER);
+        assertThat(created.userId()).isEqualTo(providerUser.getId());
 
         mockMvc.perform(get("/api/providers/{id}", created.id())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
@@ -159,11 +161,12 @@ class ProviderControllerIntegrationTest {
     }
 
     @Test
-    void createProviderRejectsNonProviderUser() throws Exception {
+    void createProviderRejectsDuplicateEmail() throws Exception {
         String adminToken = createAdminAndLogin("admin-provider-role@example.com");
-        AppUser customer = createUser("not-provider@example.com", UserRole.CUSTOMER);
+        createUser("duplicate-provider-email@example.com", UserRole.CUSTOMER);
         CreateProviderRequest request = new CreateProviderRequest(
-                customer.getId(),
+                "duplicate-provider-email@example.com",
+                "Password1!",
                 "Customer Studio",
                 null,
                 "consulting",
@@ -175,25 +178,29 @@ class ProviderControllerIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("PROV_003"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AUTH_005"));
     }
 
     @Test
-    void createProviderRejectsDuplicateUser() throws Exception {
+    void updateProviderRejectsDuplicateUser() throws Exception {
         String adminToken = createAdminAndLogin("admin-provider-duplicate@example.com");
         AppUser providerUser = createUser("duplicate-provider@example.com", UserRole.PROVIDER);
         providers.save(new Provider(providerUser, "Existing Provider", null, "wellness", "Milano", null));
-        CreateProviderRequest request = new CreateProviderRequest(
+
+        AppUser secondProviderUser = createUser("second-duplicate-provider@example.com", UserRole.PROVIDER);
+        Provider secondProvider = providers.save(new Provider(secondProviderUser, "Second Provider", null, "wellness", "Roma", null));
+        UpdateProviderRequest request = new UpdateProviderRequest(
                 providerUser.getId(),
                 "Duplicate Provider",
                 null,
                 "wellness",
                 "Milano",
-                null
+                null,
+                true
         );
 
-        mockMvc.perform(post("/api/providers")
+        mockMvc.perform(put("/api/providers/{id}", secondProvider.getId())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))

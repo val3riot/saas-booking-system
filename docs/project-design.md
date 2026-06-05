@@ -73,8 +73,7 @@ Professionista o struttura che offre servizi prenotabili.
 
 Funzionalità previste:
 
-- registrazione autonoma come fornitore;
-- creazione profilo provider;
+- registrazione autonoma come fornitore con creazione contestuale di account e profilo provider;
 - modifica dati professionali;
 - gestione servizi offerti;
 - configurazione disponibilità;
@@ -117,9 +116,13 @@ Responsabilità:
 - gestione dati personali;
 - associazione ai ruoli applicativi.
 
+Nota di dominio: il ruolo `PROVIDER` non deve esistere come account operativo senza un profilo provider collegato. La creazione provider avviene tramite workflow atomico account + attività.
+
 ### Provider
 
 Rappresenta un professionista o una struttura che offre servizi prenotabili.
+
+Non rappresenta l'identità di login: quella resta in `User`. Il provider rappresenta l'attività professionale collegata a un utente con ruolo `PROVIDER`.
 
 Informazioni principali:
 

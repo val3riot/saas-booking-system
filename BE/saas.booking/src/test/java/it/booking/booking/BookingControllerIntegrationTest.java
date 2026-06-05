@@ -425,6 +425,139 @@ class BookingControllerIntegrationTest {
     }
 
     @Test
+    void disablingCustomerCancelsActiveBookingsAndInvalidatesExistingToken() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-disabled-customer-provider@example.com");
+        AppUser customer = createUser("booking-disabled-customer@example.com", UserRole.CUSTOMER);
+        String customerToken = login(customer.getEmail());
+        String adminToken = createAdminAndLogin("booking-disabled-customer-admin@example.com");
+        LocalDate date = nextDate(DayOfWeek.MONDAY);
+        Instant startsAt = date.atTime(9, 0).toInstant(ZoneOffset.UTC);
+
+        BookingResponse booking = createBooking(customerToken, provider, startsAt);
+
+        mockMvc.perform(post("/api/users/{id}/disable", customer.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+
+        Booking cancelled = bookings.findById(booking.id()).orElseThrow();
+        AppUser admin = users.findByEmail("booking-disabled-customer-admin@example.com").orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(cancelled.getCancelledBy().getId()).isEqualTo(admin.getId());
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Account customer disabilitato da admin");
+
+        mockMvc.perform(get("/api/booking-slots")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .param("providerId", provider.provider().getId().toString())
+                        .param("serviceId", provider.service().getId().toString())
+                        .param("from", date.toString())
+                        .param("to", date.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].startsAt").value(startsAt.toString()))
+                .andExpect(jsonPath("$[0].status").value("AVAILABLE"));
+    }
+
+    @Test
+    void deactivatingProviderCancelsActiveBookingsAndRejectsNewAvailabilityRequests() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-deactivated-provider@example.com");
+        String customerToken = createCustomerAndLogin("booking-deactivated-provider-customer@example.com");
+        String adminToken = createAdminAndLogin("booking-deactivated-provider-admin@example.com");
+        LocalDate date = nextDate(DayOfWeek.MONDAY);
+        Instant startsAt = date.atTime(9, 0).toInstant(ZoneOffset.UTC);
+
+        BookingResponse booking = createBooking(customerToken, provider, startsAt);
+
+        mockMvc.perform(post("/api/providers/{id}/deactivate", provider.provider().getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        Booking cancelled = bookings.findById(booking.id()).orElseThrow();
+        AppUser admin = users.findByEmail("booking-deactivated-provider-admin@example.com").orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(cancelled.getCancelledBy().getId()).isEqualTo(admin.getId());
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Provider disattivato da admin");
+
+        mockMvc.perform(get("/api/booking-slots")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .param("providerId", provider.provider().getId().toString())
+                        .param("serviceId", provider.service().getId().toString())
+                        .param("from", date.toString())
+                        .param("to", date.toString()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_004"));
+
+        mockMvc.perform(post("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateBookingRequest(
+                                provider.provider().getId(),
+                                provider.service().getId(),
+                                date.atTime(10, 0).toInstant(ZoneOffset.UTC)
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_004"));
+    }
+
+    @Test
+    void disablingProviderAccountDeactivatesProviderAndCancelsActiveBookings() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-disabled-provider-account@example.com");
+        String customerToken = createCustomerAndLogin("booking-disabled-provider-account-customer@example.com");
+        String adminToken = createAdminAndLogin("booking-disabled-provider-account-admin@example.com");
+        Instant startsAt = nextSlot(DayOfWeek.MONDAY, LocalTime.of(9, 0));
+
+        BookingResponse booking = createBooking(customerToken, provider, startsAt);
+
+        mockMvc.perform(post("/api/users/{id}/disable", provider.user().getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        Provider inactiveProvider = providers.findById(provider.provider().getId()).orElseThrow();
+        assertThat(inactiveProvider.isActive()).isFalse();
+
+        Booking cancelled = bookings.findById(booking.id()).orElseThrow();
+        AppUser admin = users.findByEmail("booking-disabled-provider-account-admin@example.com").orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(cancelled.getCancelledBy().getId()).isEqualTo(admin.getId());
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Account provider disabilitato da admin");
+    }
+
+    @Test
+    void disabledProviderAccountIsNotBookableEvenIfProviderProfileIsStillActive() throws Exception {
+        ProviderFixture provider = createProviderFixture("booking-stale-disabled-provider@example.com");
+        provider.user().disable();
+        users.save(provider.user());
+        String customerToken = createCustomerAndLogin("booking-stale-disabled-provider-customer@example.com");
+        LocalDate date = nextDate(DayOfWeek.MONDAY);
+        Instant startsAt = date.atTime(9, 0).toInstant(ZoneOffset.UTC);
+
+        assertThat(providers.findById(provider.provider().getId()).orElseThrow().isActive()).isTrue();
+
+        mockMvc.perform(get("/api/booking-slots")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .param("providerId", provider.provider().getId().toString())
+                        .param("serviceId", provider.service().getId().toString())
+                        .param("from", date.toString())
+                        .param("to", date.toString()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_004"));
+
+        mockMvc.perform(post("/api/bookings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateBookingRequest(
+                                provider.provider().getId(),
+                                provider.service().getId(),
+                                startsAt
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BOOK_004"));
+    }
+
+    @Test
     void providerCanSeeAgendaForReceivedBookings() throws Exception {
         ProviderFixture provider = createProviderFixture("booking-agenda-provider@example.com");
         String customerToken = createCustomerAndLogin("booking-agenda-customer@example.com");
@@ -544,6 +677,11 @@ class BookingControllerIntegrationTest {
 
     private String createCustomerAndLogin(String email) throws Exception {
         createUser(email, UserRole.CUSTOMER);
+        return login(email);
+    }
+
+    private String createAdminAndLogin(String email) throws Exception {
+        createUser(email, UserRole.ADMIN);
         return login(email);
     }
 

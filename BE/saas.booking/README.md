@@ -131,6 +131,39 @@ Gli endpoint `/api/providers/me/**` richiedono ruolo `PROVIDER`.
 Gli endpoint `/api/bookings/**` richiedono ruolo `CUSTOMER`.
 Gli endpoint `/api/catalog/**` e `/api/booking-slots` richiedono autenticazione e restituiscono solo provider/servizi attivi.
 
+`POST /api/providers` e il workflow admin per creare un provider in modo atomico. Il payload include credenziali account e dati attivita:
+
+```json
+{
+  "email": "studio@example.com",
+  "password": "Password1!",
+  "businessName": "Studio Fisio",
+  "description": "Fisioterapia e riabilitazione",
+  "category": "wellness",
+  "city": "Milano",
+  "address": "Via Roma 1"
+}
+```
+
+Il backend crea nella stessa transazione un `AppUser` con ruolo `PROVIDER` e il relativo profilo `Provider`.
+
+`POST /api/users` non accetta il ruolo `PROVIDER` e `PUT /api/users/{id}` non consente conversioni da o verso `PROVIDER`. Le modifiche di ruolo provider richiedono un workflow dedicato, per evitare account provider senza attivita o profili con servizi, disponibilita e prenotazioni incoerenti.
+
+Disabilitare un customer ha effetto operativo immediato:
+
+- i token gia emessi non vengono piu accettati perche il filtro JWT ricontrolla l'utente persistito e il flag `enabled`;
+- le prenotazioni del customer in stato `PENDING` o `CONFIRMED` con `endsAt` futuro vengono cancellate;
+- la cancellazione registra `cancelledBy` sull'admin che ha eseguito l'operazione e un audit `BOOKING_CANCELLED`;
+- le prenotazioni passate non vengono riscritte.
+
+Disattivare un provider ha effetto operativo immediato:
+
+- il provider non viene piu restituito dal catalogo e i suoi servizi non sono piu bookable;
+- le prenotazioni del provider in stato `PENDING` o `CONFIRMED` con `endsAt` futuro vengono cancellate;
+- i servizi non vengono disattivati fisicamente: restano configurati per consentire riattivazione del provider senza perdere catalogo operativo;
+- disabilitare l'account utente di un provider disattiva anche il relativo profilo provider;
+- le prenotazioni passate non vengono riscritte.
+
 La ricerca catalogo provider supporta:
 
 - `query`: ricerca su nome attività e descrizione;

@@ -4,6 +4,23 @@ La roadmap descrive l'evoluzione incrementale del progetto. Il documento di anal
 
 ---
 
+## Stato attuale
+
+Aggiornato al 2026-06-05.
+
+- Step 1 completato.
+- Step 2 completato nei flussi principali.
+- Step 3 completato lato backend nei punti principali: indisponibilità, slot bloccati, agenda provider, cancellazioni tracciate.
+- Step 4 sostanzialmente completato lato backend per stati booking, conferma/rifiuto/cancellazione provider e audit log sincrono.
+- Step 5 parzialmente coperto dal catalogo e dai filtri disponibili, ma va ancora consolidato come ricerca paginabile/ordinabile.
+- Step 6 implementato con frontend React collegato al backend per auth, catalogo, booking, gestione provider e admin.
+
+Prima di passare a caching/eventi asincroni conviene mantenere stabile l'invariante operativo appena consolidato: un provider e i suoi servizi sono prenotabili solo quando il profilo provider è attivo e l'account utente collegato è abilitato.
+
+Nota per le notifiche: oggi le cancellazioni automatiche causate da disabilitazione customer/provider aggiornano il booking e scrivono audit log nello stesso flusso sincrono. Quando verrà introdotto lo step eventi/notifiche, questa parte andrà rivista per pubblicare eventi di dominio e generare notifiche verso customer e provider senza accoppiare direttamente i service principali al canale di notifica.
+
+---
+
 ## Step 1 - Base backend
 
 Obiettivo: stabilizzare la base backend e definire il modello dati iniziale.

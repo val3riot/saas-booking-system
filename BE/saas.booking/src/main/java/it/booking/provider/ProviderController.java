@@ -68,8 +68,12 @@ public class ProviderController {
     }
 
     @PutMapping("/{id}")
-    ProviderResponse update(@PathVariable Long id, @Valid @RequestBody UpdateProviderRequest request) {
-        return providerService.update(id, request);
+    ProviderResponse update(
+            @AuthenticationPrincipal AuthenticatedUser admin,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateProviderRequest request
+    ) {
+        return providerService.update(id, request, admin.id());
     }
 
     @PostMapping("/{id}/activate")
@@ -81,15 +85,15 @@ public class ProviderController {
 
     @PostMapping("/{id}/deactivate")
     @ApiResponse(responseCode = "204", description = "Provider deactivated")
-    ResponseEntity<Void> deactivate(@PathVariable Long id) {
-        providerService.deactivate(id);
+    ResponseEntity<Void> deactivate(@AuthenticationPrincipal AuthenticatedUser admin, @PathVariable Long id) {
+        providerService.deactivate(id, admin.id());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")
     @ApiResponse(responseCode = "204", description = "Provider deactivated")
-    ResponseEntity<Void> delete(@PathVariable Long id) {
-        providerService.delete(id);
+    ResponseEntity<Void> delete(@AuthenticationPrincipal AuthenticatedUser admin, @PathVariable Long id) {
+        providerService.delete(id, admin.id());
         return ResponseEntity.noContent().build();
     }
 }

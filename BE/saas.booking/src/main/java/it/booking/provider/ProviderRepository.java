@@ -19,6 +19,8 @@ public interface ProviderRepository extends JpaRepository<Provider, Long>, JpaSp
 
     Optional<Provider> findByIdAndActiveTrue(Long id);
 
+    Optional<Provider> findByIdAndActiveTrueAndUserEnabledTrue(Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select provider from Provider provider where provider.id = :id")
     Optional<Provider> findByIdForUpdate(@Param("id") Long id);
@@ -30,6 +32,8 @@ public interface ProviderRepository extends JpaRepository<Provider, Long>, JpaSp
     boolean existsByUserId(Long userId);
 
     boolean existsByIdAndActiveTrue(Long id);
+
+    boolean existsByIdAndActiveTrueAndUserEnabledTrue(Long id);
 
     boolean existsByUserIdAndIdNot(Long userId, Long id);
 }

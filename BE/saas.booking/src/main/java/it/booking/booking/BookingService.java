@@ -152,6 +152,9 @@ public class BookingService {
         if (!provider.isActive()) {
             throw new ApiException(ErrorCode.PROVIDER_NOT_AVAILABLE);
         }
+        if (!provider.getUser().isEnabled()) {
+            throw new ApiException(ErrorCode.PROVIDER_NOT_AVAILABLE);
+        }
         if (!service.isActive()) {
             throw new ApiException(ErrorCode.SERVICE_NOT_AVAILABLE);
         }

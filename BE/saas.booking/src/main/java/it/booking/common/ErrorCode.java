@@ -26,6 +26,7 @@ public enum ErrorCode {
     PROVIDER_NOT_FOUND("PROV_001", HttpStatus.NOT_FOUND, "Provider not found"),
     PROVIDER_ALREADY_EXISTS("PROV_002", HttpStatus.CONFLICT, "Provider already exists for user"),
     PROVIDER_USER_ROLE_REQUIRED("PROV_003", HttpStatus.BAD_REQUEST, "User must have PROVIDER role"),
+    PROVIDER_USER_DISABLED("PROV_004", HttpStatus.BAD_REQUEST, "Provider user account is disabled"),
     SERVICE_NOT_FOUND("SERV_001", HttpStatus.NOT_FOUND, "Service not found"),
     SERVICE_ALREADY_EXISTS("SERV_002", HttpStatus.CONFLICT, "Service already exists for provider"),
     AVAILABILITY_NOT_FOUND("AVAIL_001", HttpStatus.NOT_FOUND, "Availability not found"),
@@ -36,6 +37,8 @@ public enum ErrorCode {
     AVAILABILITY_EXCEPTION_OVERLAP("AVEX_003", HttpStatus.CONFLICT, "Availability exception overlaps an existing active exception"),
     AVAILABILITY_EXCEPTION_BOOKING_CONFLICT("AVEX_004", HttpStatus.CONFLICT, "Availability exception overlaps an active booking"),
     USER_NOT_FOUND("USER_001", HttpStatus.NOT_FOUND, "User not found"),
+    USER_PROVIDER_ROLE_REQUIRES_PROFILE("USER_002", HttpStatus.BAD_REQUEST, "Provider users must be created with a provider profile"),
+    USER_PROVIDER_ROLE_CHANGE_NOT_ALLOWED("USER_003", HttpStatus.CONFLICT, "Provider role changes require a dedicated provider workflow"),
     RESOURCE_NOT_FOUND("RES_001", HttpStatus.NOT_FOUND, "Resource not found"),
     INTERNAL_ERROR("SYS_001", HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error");
 

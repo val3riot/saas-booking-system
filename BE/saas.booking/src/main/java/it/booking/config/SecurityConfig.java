@@ -24,6 +24,7 @@ public class SecurityConfig {
             RestAccessDeniedHandler accessDeniedHandler
     ) throws Exception {
         return http
+                .cors(cors -> { })
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
                 .exceptionHandling(exceptions -> exceptions

@@ -57,9 +57,9 @@ class UserControllerIntegrationTest {
     void adminCanManageUsers() throws Exception {
         String adminToken = createAdminAndLogin("admin-users@example.com");
         CreateUserRequest createRequest = new CreateUserRequest(
-                "provider-user@example.com",
+                "managed-user@example.com",
                 "Password1!",
-                UserRole.PROVIDER
+                UserRole.CUSTOMER
         );
 
         String createResponse = mockMvc.perform(post("/api/users")
@@ -67,8 +67,8 @@ class UserControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.email").value("provider-user@example.com"))
-                .andExpect(jsonPath("$.role").value("PROVIDER"))
+                .andExpect(jsonPath("$.email").value("managed-user@example.com"))
+                .andExpect(jsonPath("$.role").value("CUSTOMER"))
                 .andExpect(jsonPath("$.enabled").value(true))
                 .andReturn()
                 .getResponse()
@@ -82,8 +82,8 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.id").value(created.id()));
 
         UpdateUserRequest updateRequest = new UpdateUserRequest(
-                "updated-provider@example.com",
-                UserRole.CUSTOMER,
+                "updated-managed-user@example.com",
+                UserRole.ADMIN,
                 true
         );
 
@@ -92,8 +92,8 @@ class UserControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("updated-provider@example.com"))
-                .andExpect(jsonPath("$.role").value("CUSTOMER"));
+                .andExpect(jsonPath("$.email").value("updated-managed-user@example.com"))
+                .andExpect(jsonPath("$.role").value("ADMIN"));
 
         mockMvc.perform(post("/api/users/{id}/disable", created.id())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
@@ -121,7 +121,7 @@ class UserControllerIntegrationTest {
     void adminCreateUserRejectsDuplicateEmail() throws Exception {
         String adminToken = createAdminAndLogin("admin-duplicate@example.com");
         users.save(new AppUser("existing-user@example.com", passwordEncoder.encode("Password1!"), UserRole.CUSTOMER));
-        CreateUserRequest request = new CreateUserRequest("existing-user@example.com", "Password1!", UserRole.PROVIDER);
+        CreateUserRequest request = new CreateUserRequest("existing-user@example.com", "Password1!", UserRole.CUSTOMER);
 
         mockMvc.perform(post("/api/users")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
@@ -132,11 +132,24 @@ class UserControllerIntegrationTest {
     }
 
     @Test
+    void adminCreateUserRejectsProviderRole() throws Exception {
+        String adminToken = createAdminAndLogin("admin-provider-user-rejected@example.com");
+        CreateUserRequest request = new CreateUserRequest("loose-provider@example.com", "Password1!", UserRole.PROVIDER);
+
+        mockMvc.perform(post("/api/users")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("USER_002"));
+    }
+
+    @Test
     void adminUpdateUserRejectsDuplicateEmail() throws Exception {
         String adminToken = createAdminAndLogin("admin-update-duplicate@example.com");
         AppUser existing = users.save(new AppUser("update-existing@example.com", passwordEncoder.encode("Password1!"), UserRole.CUSTOMER));
-        AppUser target = users.save(new AppUser("update-target@example.com", passwordEncoder.encode("Password1!"), UserRole.PROVIDER));
-        UpdateUserRequest request = new UpdateUserRequest(existing.getEmail(), UserRole.PROVIDER, true);
+        AppUser target = users.save(new AppUser("update-target@example.com", passwordEncoder.encode("Password1!"), UserRole.CUSTOMER));
+        UpdateUserRequest request = new UpdateUserRequest(existing.getEmail(), UserRole.CUSTOMER, true);
 
         mockMvc.perform(put("/api/users/{id}", target.getId())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
@@ -144,6 +157,34 @@ class UserControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("AUTH_005"));
+    }
+
+    @Test
+    void adminUpdateUserRejectsCustomerToProviderRoleChange() throws Exception {
+        String adminToken = createAdminAndLogin("admin-update-provider-role@example.com");
+        AppUser target = users.save(new AppUser("promote-provider@example.com", passwordEncoder.encode("Password1!"), UserRole.CUSTOMER));
+        UpdateUserRequest request = new UpdateUserRequest(target.getEmail(), UserRole.PROVIDER, true);
+
+        mockMvc.perform(put("/api/users/{id}", target.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("USER_002"));
+    }
+
+    @Test
+    void adminUpdateUserRejectsProviderRoleRemoval() throws Exception {
+        String adminToken = createAdminAndLogin("admin-remove-provider-role@example.com");
+        AppUser target = users.save(new AppUser("provider-role-removal@example.com", passwordEncoder.encode("Password1!"), UserRole.PROVIDER));
+        UpdateUserRequest request = new UpdateUserRequest(target.getEmail(), UserRole.CUSTOMER, true);
+
+        mockMvc.perform(put("/api/users/{id}", target.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_003"));
     }
 
     @Test

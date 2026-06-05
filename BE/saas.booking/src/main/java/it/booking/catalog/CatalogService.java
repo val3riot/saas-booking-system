@@ -33,7 +33,7 @@ public class CatalogService {
 
     @Transactional(readOnly = true)
     public List<CatalogProviderResponse> listProviders() {
-        return providers.findAllByActiveTrueOrderByBusinessNameAsc()
+        return providers.findAll(CatalogProviderSpecifications.search(null, null, null, null), Sort.by(Sort.Direction.ASC, "businessName"))
                 .stream()
                 .map(catalogMapper::toProviderResponse)
                 .toList();
@@ -67,7 +67,7 @@ public class CatalogService {
 
     @Transactional(readOnly = true)
     public CatalogProviderResponse getProvider(Long providerId) {
-        return providers.findByIdAndActiveTrue(providerId)
+        return providers.findByIdAndActiveTrueAndUserEnabledTrue(providerId)
                 .map(catalogMapper::toProviderResponse)
                 .orElseThrow(() -> new ApiException(ErrorCode.PROVIDER_NOT_FOUND));
     }
@@ -75,7 +75,7 @@ public class CatalogService {
     @Transactional(readOnly = true)
     public List<CatalogServiceResponse> listServices(Long providerId) {
         ensureActiveProvider(providerId);
-        return offeredServices.findAllByProviderIdAndActiveTrueOrderByNameAsc(providerId)
+        return offeredServices.findAllBookableByProviderIdOrderByNameAsc(providerId)
                 .stream()
                 .map(catalogMapper::toServiceResponse)
                 .toList();
@@ -84,13 +84,13 @@ public class CatalogService {
     @Transactional(readOnly = true)
     public CatalogServiceResponse getService(Long providerId, Long serviceId) {
         ensureActiveProvider(providerId);
-        return offeredServices.findByIdAndProviderIdAndActiveTrue(serviceId, providerId)
+        return offeredServices.findBookableByIdAndProviderId(serviceId, providerId)
                 .map(catalogMapper::toServiceResponse)
                 .orElseThrow(() -> new ApiException(ErrorCode.SERVICE_NOT_FOUND));
     }
 
     private void ensureActiveProvider(Long providerId) {
-        if (!providers.existsByIdAndActiveTrue(providerId)) {
+        if (!providers.existsByIdAndActiveTrueAndUserEnabledTrue(providerId)) {
             throw new ApiException(ErrorCode.PROVIDER_NOT_FOUND);
         }
     }
