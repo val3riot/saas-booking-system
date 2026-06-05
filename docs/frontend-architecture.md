@@ -157,8 +157,8 @@ La pagina `features/catalog/pages/CatalogPage.tsx` decide se mostrare area custo
 
 La logica customer e in `features/catalog/hooks/useCustomerCatalog.ts`, inclusi:
 
-- ricerca provider;
-- paginazione risultati;
+- ricerca provider con testo, categoria, citta e disponibilita su data;
+- paginazione e ordinamento risultati;
 - selezione provider;
 - caricamento servizi;
 - caricamento slot prenotabili;

@@ -51,3 +51,26 @@ Per cambiare URL:
 ```bash
 VITE_API_BASE_URL=http://localhost:8080 npm run dev
 ```
+
+## Dati demo
+
+Con il backend avviato puoi popolare dati di test via API:
+
+```bash
+python3 scripts/seed-demo-data.py
+```
+
+Lo script crea 10 customer, 10 provider e 3 servizi con disponibilita per ogni provider. Tutti gli utenti demo usano password `Password1!`.
+
+Account esempio:
+
+```text
+customer01@example.test
+provider01@example.test
+```
+
+Per usare un backend diverso:
+
+```bash
+python3 scripts/seed-demo-data.py --api-base-url http://localhost:8080
+```

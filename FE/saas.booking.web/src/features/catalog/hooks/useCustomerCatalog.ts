@@ -12,7 +12,10 @@ const initialSearch: CatalogSearchState = {
   query: '',
   category: '',
   city: '',
-  availableOn: ''
+  availableOn: '',
+  sort: 'BUSINESS_NAME',
+  direction: 'ASC',
+  size: '10'
 };
 
 export function useCustomerCatalog() {
@@ -56,11 +59,14 @@ export function useCustomerCatalog() {
 
     try {
       const providers = await searchProviders({
-        ...filters,
+        query: filters.query,
+        category: filters.category,
+        city: filters.city,
+        availableOn: filters.availableOn,
         page,
-        size: 10,
-        sort: 'BUSINESS_NAME',
-        direction: 'ASC'
+        size: Number(filters.size),
+        sort: filters.sort,
+        direction: filters.direction
       });
       setResult(providers);
       if ((selectFirstResult || !selectedProvider) && providers.content.length > 0) {

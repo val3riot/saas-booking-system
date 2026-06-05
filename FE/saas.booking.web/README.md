@@ -52,6 +52,12 @@ Il codice e organizzato per feature:
 
 La documentazione di dettaglio e in [`../../docs/frontend-architecture.md`](../../docs/frontend-architecture.md).
 
+## Catalogo customer
+
+La pagina catalogo usa `/api/catalog/providers/search` e permette ricerca per testo, categoria, citta, disponibilita su data, ordinamento, direzione e numero di risultati per pagina.
+
+Il dettaglio provider carica i servizi prenotabili e gli slot disponibili per servizio/data. La conferma slot crea una prenotazione customer tramite `/api/bookings`.
+
 ## Regole di dominio rilevanti
 
 Un provider non viene creato come semplice utente con ruolo `PROVIDER`.

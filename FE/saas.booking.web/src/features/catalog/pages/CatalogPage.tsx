@@ -35,7 +35,7 @@ function CustomerCatalogPage() {
       </section>
 
       <form
-        className="grid items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:grid-cols-[1.3fr_1fr_1fr_0.9fr_auto]"
+        className="grid items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-[1.3fr_0.9fr_0.9fr_0.8fr_0.95fr_0.8fr_0.75fr_auto]"
         onSubmit={catalog.handleSearch}
       >
         <FormField
@@ -64,6 +64,45 @@ function CustomerCatalogPage() {
           value={catalog.filters.availableOn}
           onChange={(event) => catalog.setFilters({ ...catalog.filters, availableOn: event.target.value })}
         />
+        <label className="grid gap-1.5 text-sm font-semibold text-slate-950">
+          <span>Ordina per</span>
+          <select
+            className="min-h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15"
+            value={catalog.filters.sort}
+            onChange={(event) =>
+              catalog.setFilters({ ...catalog.filters, sort: event.target.value as typeof catalog.filters.sort })
+            }
+          >
+            <option value="BUSINESS_NAME">Nome</option>
+            <option value="CITY">Citta'</option>
+            <option value="CATEGORY">Categoria</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm font-semibold text-slate-950">
+          <span>Direzione</span>
+          <select
+            className="min-h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15"
+            value={catalog.filters.direction}
+            onChange={(event) =>
+              catalog.setFilters({ ...catalog.filters, direction: event.target.value as typeof catalog.filters.direction })
+            }
+          >
+            <option value="ASC">Crescente</option>
+            <option value="DESC">Decrescente</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm font-semibold text-slate-950">
+          <span>Risultati</span>
+          <select
+            className="min-h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15"
+            value={catalog.filters.size}
+            onChange={(event) => catalog.setFilters({ ...catalog.filters, size: event.target.value })}
+          >
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+          </select>
+        </label>
         <Button type="submit" disabled={catalog.isLoading}>
           Cerca
         </Button>

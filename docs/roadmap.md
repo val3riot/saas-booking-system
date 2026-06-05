@@ -12,7 +12,7 @@ Aggiornato al 2026-06-05.
 - Step 2 completato nei flussi principali.
 - Step 3 completato lato backend nei punti principali: indisponibilità, slot bloccati, agenda provider, cancellazioni tracciate.
 - Step 4 sostanzialmente completato lato backend per stati booking, conferma/rifiuto/cancellazione provider e audit log sincrono.
-- Step 5 parzialmente coperto dal catalogo e dai filtri disponibili, ma va ancora consolidato come ricerca paginabile/ordinabile.
+- Step 5 completato nei flussi principali: ricerca provider con filtri, disponibilita, paginazione e ordinamento esposti anche nel frontend customer.
 - Step 6 implementato con frontend React collegato al backend per auth, catalogo, booking, gestione provider e admin.
 
 Prima di passare a caching/eventi asincroni conviene mantenere stabile l'invariante operativo appena consolidato: un provider e i suoi servizi sono prenotabili solo quando il profilo provider è attivo e l'account utente collegato è abilitato.

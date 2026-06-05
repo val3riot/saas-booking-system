@@ -32,4 +32,7 @@ export type CatalogSearchState = {
   category: string;
   city: string;
   availableOn: string;
+  sort: 'BUSINESS_NAME' | 'CITY' | 'CATEGORY';
+  direction: 'ASC' | 'DESC';
+  size: string;
 };
