@@ -5,6 +5,7 @@ import static it.booking.common.TextUtils.trimNullable;
 
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
+import it.booking.config.CacheInvalidator;
 import it.booking.provider.Provider;
 import it.booking.provider.ProviderRepository;
 import java.util.List;
@@ -16,15 +17,18 @@ public class OfferedServiceService {
 
     private final OfferedServiceRepository offeredServices;
     private final ProviderRepository providers;
+    private final CacheInvalidator cacheInvalidator;
     private final OfferedServiceMapper offeredServiceMapper;
 
     public OfferedServiceService(
             OfferedServiceRepository offeredServices,
             ProviderRepository providers,
+            CacheInvalidator cacheInvalidator,
             OfferedServiceMapper offeredServiceMapper
     ) {
         this.offeredServices = offeredServices;
         this.providers = providers;
+        this.cacheInvalidator = cacheInvalidator;
         this.offeredServiceMapper = offeredServiceMapper;
     }
 
@@ -58,6 +62,7 @@ public class OfferedServiceService {
                 request.durationMinutes(),
                 request.priceCents()
         ));
+        cacheInvalidator.serviceChanged(provider.getId(), service.getId());
         return offeredServiceMapper.toResponse(service);
     }
 
@@ -83,6 +88,7 @@ public class OfferedServiceService {
                 request.priceCents(),
                 request.active()
         );
+        cacheInvalidator.serviceChanged(provider.getId(), service.getId());
         return offeredServiceMapper.toResponse(service);
     }
 
@@ -92,6 +98,7 @@ public class OfferedServiceService {
         OfferedService service = offeredServices.findByIdAndProviderId(serviceId, provider.getId())
                 .orElseThrow(() -> new ApiException(ErrorCode.SERVICE_NOT_FOUND));
         service.activate();
+        cacheInvalidator.serviceChanged(provider.getId(), service.getId());
     }
 
     @Transactional
@@ -100,6 +107,7 @@ public class OfferedServiceService {
         OfferedService service = offeredServices.findByIdAndProviderId(serviceId, provider.getId())
                 .orElseThrow(() -> new ApiException(ErrorCode.SERVICE_NOT_FOUND));
         service.deactivate();
+        cacheInvalidator.serviceChanged(provider.getId(), service.getId());
     }
 
     @Transactional

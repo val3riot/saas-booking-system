@@ -8,6 +8,7 @@ import it.booking.booking.BookingRepository;
 import it.booking.booking.BookingStatus;
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
+import it.booking.config.CacheInvalidator;
 import it.booking.provider.Provider;
 import it.booking.provider.ProviderRepository;
 import java.time.Instant;
@@ -26,6 +27,7 @@ public class UserService {
     private final ProviderRepository providers;
     private final BookingRepository bookings;
     private final AuditService auditService;
+    private final CacheInvalidator cacheInvalidator;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
 
@@ -34,6 +36,7 @@ public class UserService {
             ProviderRepository providers,
             BookingRepository bookings,
             AuditService auditService,
+            CacheInvalidator cacheInvalidator,
             PasswordEncoder passwordEncoder,
             UserMapper userMapper
     ) {
@@ -41,6 +44,7 @@ public class UserService {
         this.providers = providers;
         this.bookings = bookings;
         this.auditService = auditService;
+        this.cacheInvalidator = cacheInvalidator;
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
     }
@@ -152,6 +156,7 @@ public class UserService {
         providers.findByUserId(providerUser.getId()).ifPresent(provider -> {
             boolean wasActive = provider.isActive();
             provider.deactivate();
+            cacheInvalidator.providerVisibilityChanged(provider.getId());
             if (wasActive) {
                 cancelActiveProviderBookings(provider, admin);
             }

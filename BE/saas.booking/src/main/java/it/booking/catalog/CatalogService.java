@@ -1,5 +1,10 @@
 package it.booking.catalog;
 
+import static it.booking.config.CacheNames.PROVIDER_DETAILS;
+import static it.booking.config.CacheNames.PROVIDER_SEARCH;
+import static it.booking.config.CacheNames.PROVIDER_SERVICES;
+import static it.booking.config.CacheNames.SERVICE_DETAILS;
+
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
 import it.booking.common.PageResponse;
@@ -7,7 +12,10 @@ import it.booking.common.TextUtils;
 import it.booking.offering.OfferedServiceRepository;
 import it.booking.provider.ProviderRepository;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -40,6 +48,12 @@ public class CatalogService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = PROVIDER_SEARCH,
+            key = "'default'",
+            condition = "@providerSearchCachePolicy.isBaseSearch("
+                    + "#query, #category, #city, #availableOn, #page, #size, #sort, #direction)"
+    )
     public PageResponse<CatalogProviderResponse> searchProviders(
             String query,
             String category,
@@ -66,6 +80,7 @@ public class CatalogService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = PROVIDER_DETAILS, key = "#providerId")
     public CatalogProviderResponse getProvider(Long providerId) {
         return providers.findByIdAndActiveTrueAndUserEnabledTrue(providerId)
                 .map(catalogMapper::toProviderResponse)
@@ -73,15 +88,17 @@ public class CatalogService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = PROVIDER_SERVICES, key = "#providerId")
     public List<CatalogServiceResponse> listServices(Long providerId) {
         ensureActiveProvider(providerId);
-        return offeredServices.findAllBookableByProviderIdOrderByNameAsc(providerId)
+        return new ArrayList<>(offeredServices.findAllBookableByProviderIdOrderByNameAsc(providerId)
                 .stream()
                 .map(catalogMapper::toServiceResponse)
-                .toList();
+                .toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = SERVICE_DETAILS)
     public CatalogServiceResponse getService(Long providerId, Long serviceId) {
         ensureActiveProvider(providerId);
         return offeredServices.findBookableByIdAndProviderId(serviceId, providerId)

@@ -6,7 +6,7 @@ La roadmap descrive l'evoluzione incrementale del progetto. Il documento di anal
 
 ## Stato attuale
 
-Aggiornato al 2026-06-05.
+Aggiornato al 2026-06-06.
 
 - Step 1 completato.
 - Step 2 completato nei flussi principali.
@@ -14,8 +14,11 @@ Aggiornato al 2026-06-05.
 - Step 4 sostanzialmente completato lato backend per stati booking, conferma/rifiuto/cancellazione provider e audit log sincrono.
 - Step 5 completato nei flussi principali: ricerca provider con filtri, disponibilita, paginazione e ordinamento esposti anche nel frontend customer.
 - Step 6 implementato con frontend React collegato al backend per auth, catalogo, booking, gestione provider e admin.
+- Step 7 completato con Redis sul catalogo pubblico, invalidazione esplicita e TTL differenziati.
 
-Prima di passare a caching/eventi asincroni conviene mantenere stabile l'invariante operativo appena consolidato: un provider e i suoi servizi sono prenotabili solo quando il profilo provider è attivo e l'account utente collegato è abilitato.
+Il backend resta per ora un monolite modulare. Le prossime evoluzioni devono predisporre confini estraibili per `booking-service`, `notification-service` ed `email-service`, senza separare subito i deploy.
+
+Prima di passare a caching/eventi asincroni conviene mantenere stabile l'invariante operativo consolidato: un provider e i suoi servizi sono prenotabili solo quando il profilo provider è attivo e l'account utente collegato è abilitato.
 
 Nota per le notifiche: oggi le cancellazioni automatiche causate da disabilitazione customer/provider aggiornano il booking e scrivono audit log nello stesso flusso sincrono. Quando verrà introdotto lo step eventi/notifiche, questa parte andrà rivista per pubblicare eventi di dominio e generare notifiche verso customer e provider senza accoppiare direttamente i service principali al canale di notifica.
 
@@ -180,34 +183,37 @@ Risultato atteso:
 
 ---
 
-## Step 7 - Redis caching
+## Step 7 - Redis caching (completato)
 
 Obiettivo: introdurre caching solo dopo avere endpoint stabili e sensati da ottimizzare.
 
-Possibili casi d'uso:
+Cache implementate:
 
-- cache lista provider;
-- cache dettaglio provider;
-- cache disponibilità provider.
+- ricerca provider iniziale del frontend, senza combinazioni arbitrarie di filtri;
+- dettaglio provider;
+- lista servizi prenotabili del provider;
+- dettaglio servizio.
 
-Attività:
+Scelte implementative:
 
-- configurare Redis in Docker Compose;
-- integrare Redis nel backend;
-- applicare caching sugli endpoint più letti;
-- gestire invalidazione cache quando cambiano provider, servizi o disponibilità;
-- documentare le scelte nel README.
+- Redis configurato in Docker Compose e integrato con Spring Cache;
+- cache name centralizzati e TTL differenziati;
+- gestione fail-open degli errori Redis, con PostgreSQL come source of truth;
+- invalidazione su modifiche a provider, servizi e disponibilità ricorrenti;
+- ricerche filtrate, slot, booking, agenda e dati amministrativi mantenuti live;
+- configurazione documentata nel README.
 
 Risultato atteso:
 
 - Redis viene usato per un motivo concreto;
-- la cache non è introdotta come tecnologia isolata.
+- la cache non è introdotta come tecnologia isolata;
+- gli slot prenotabili restano calcolati live per non servire disponibilità obsolete dopo nuove prenotazioni o indisponibilità puntuali.
 
 ---
 
-## Step 8 - Kafka ed eventi asincroni
+## Step 8 - Fondazione event-driven con Outbox e Kafka
 
-Obiettivo: separare alcune operazioni secondarie dal flusso sincrono della prenotazione.
+Obiettivo: predisporre il core booking a eventi affidabili, senza trasformare subito il progetto in microservizi.
 
 Eventi previsti:
 
@@ -217,40 +223,105 @@ BookingUpdatedEvent
 BookingCancelledEvent
 BookingConfirmedEvent
 BookingRejectedEvent
+ProviderDeactivatedEvent
+CustomerDisabledEvent
+ProviderAccountDisabledEvent
 ```
-
-Consumer previsti:
-
-- Notification Consumer;
-- Audit Log Consumer.
 
 Attività:
 
+- introdurre tabella `outbox_events`;
+- scrivere eventi outbox nella stessa transazione che modifica booking/provider/customer;
 - configurare Kafka in Docker Compose;
-- pubblicare eventi dal dominio Booking;
-- creare consumer per notifiche;
-- creare consumer per audit log;
-- gestire retry o error handling di base;
-- testare il flusso end-to-end.
+- creare un publisher outbox che pubblica gli eventi su Kafka e marca gli eventi come pubblicati;
+- definire topic iniziali, ad esempio `booking.events` e `provider.events`;
+- versionare i payload evento;
+- gestire retry, errori e idempotenza base;
+- mantenere audit/notifiche ancora compatibili con il flusso attuale durante la transizione.
 
 Risultato atteso:
 
-- la creazione/modifica prenotazione genera eventi;
-- notifiche e audit log non sono accoppiati direttamente al service principale.
+- il booking core non perde eventi anche se Kafka non è disponibile nel momento della transazione;
+- gli eventi diventano il contratto per notification, email e analytics;
+- il monolite resta semplice da avviare, ma ha confini pronti per futura estrazione.
 
 ---
 
-## Step 9 - Containerizzazione completa
+## Step 9 - Notification module
+
+Obiettivo: avvisare gli utenti sugli eventi rilevanti senza accoppiare `BookingService` al canale di notifica.
+
+Attività:
+
+- creare consumer `Notification Consumer` per eventi booking/provider;
+- generare notifiche in-app su eventi come booking cancellato, confermato, rifiutato o provider disattivato;
+- esporre endpoint notifiche per utente corrente;
+- aggiungere stato `PENDING` / `READ` / `ARCHIVED` o equivalente;
+- aggiungere badge/lista notifiche nel frontend;
+- mantenere il modulo notifiche separato dal dominio booking.
+
+Risultato atteso:
+
+- la chiusura improvvisa di un provider genera cancellazioni e notifiche ai customer coinvolti;
+- il customer vede nel frontend perche una prenotazione e stata annullata;
+- il modulo `notification` diventa candidato realistico per estrazione futura.
+
+---
+
+## Step 10 - Email service boundary
+
+Obiettivo: separare la decisione di notificare dalla consegna email.
+
+Attività:
+
+- creare un modulo `email` interno o worker separabile;
+- introdurre evento/comando `EmailRequested`;
+- simulare o integrare un provider SMTP/API;
+- gestire retry e fallimenti di consegna;
+- mantenere template email separati dal dominio booking;
+- documentare il confine come candidato `email-service`.
+
+Risultato atteso:
+
+- il sistema puo inviare email senza rendere fragile il flusso booking;
+- notification ed email hanno responsabilita distinte;
+- l'estrazione a microservizio richiede soprattutto configurazione/deploy, non riscrittura del dominio.
+
+---
+
+## Step 11 - Analytics e Spring AI
+
+Obiettivo: usare gli eventi booking/provider per statistiche, insight e futuri casi ML.
+
+Attività:
+
+- creare consumer analytics sugli eventi Kafka;
+- costruire aggregazioni su prenotazioni, cancellazioni, fasce orarie e categorie;
+- esporre dashboard statistiche base per admin/provider;
+- predisporre un microservizio o modulo esterno per analytics/ML;
+- introdurre Spring AI per generare insight leggibili su dati aggregati;
+- evitare che Spring AI acceda direttamente al dominio transazionale critico.
+
+Risultato atteso:
+
+- gli eventi non servono solo alle notifiche, ma alimentano anche statistiche e casi ML;
+- Spring AI entra come strato di insight, non come funzionalita ornamentale;
+- il progetto mostra una traiettoria credibile verso servizi esterni.
+
+---
+
+## Step 12 - Containerizzazione completa
 
 Obiettivo: rendere il progetto facilmente avviabile da repository.
 
 Servizi previsti:
 
 - frontend React;
-- backend Spring Boot;
+- backend Spring Boot monolite modulare;
 - PostgreSQL;
 - Redis;
 - Kafka.
+- eventuale notification/email worker quando estratti.
 
 Attività:
 
@@ -268,7 +339,7 @@ Risultato atteso:
 
 ---
 
-## Step 10 - CI/CD e rifinitura finale
+## Step 13 - CI/CD e rifinitura finale
 
 Obiettivo: aggiungere una pipeline minima e rendere il progetto presentabile.
 

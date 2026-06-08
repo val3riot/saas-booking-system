@@ -2,6 +2,7 @@ package it.booking.availability;
 
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
+import it.booking.config.CacheInvalidator;
 import it.booking.offering.OfferedService;
 import it.booking.offering.OfferedServiceRepository;
 import it.booking.provider.Provider;
@@ -17,17 +18,20 @@ public class AvailabilityService {
     private final AvailabilityRepository availabilities;
     private final ProviderRepository providers;
     private final OfferedServiceRepository offeredServices;
+    private final CacheInvalidator cacheInvalidator;
     private final AvailabilityMapper availabilityMapper;
 
     public AvailabilityService(
             AvailabilityRepository availabilities,
             ProviderRepository providers,
             OfferedServiceRepository offeredServices,
+            CacheInvalidator cacheInvalidator,
             AvailabilityMapper availabilityMapper
     ) {
         this.availabilities = availabilities;
         this.providers = providers;
         this.offeredServices = offeredServices;
+        this.cacheInvalidator = cacheInvalidator;
         this.availabilityMapper = availabilityMapper;
     }
 
@@ -64,6 +68,7 @@ public class AvailabilityService {
                 request.startTime(),
                 request.endTime()
         ));
+        cacheInvalidator.serviceChanged(provider.getId(), serviceId);
         return availabilityMapper.toResponse(availability);
     }
 
@@ -85,6 +90,7 @@ public class AvailabilityService {
         }
 
         availability.update(request.dayOfWeek(), request.startTime(), request.endTime(), request.active());
+        cacheInvalidator.serviceChanged(provider.getId(), serviceId);
         return availabilityMapper.toResponse(availability);
     }
 
@@ -103,6 +109,7 @@ public class AvailabilityService {
                 availability.getEndTime()
         );
         availability.activate();
+        cacheInvalidator.serviceChanged(provider.getId(), serviceId);
     }
 
     @Transactional
@@ -112,6 +119,7 @@ public class AvailabilityService {
         Availability availability = availabilities.findByIdAndProviderIdAndServiceId(availabilityId, provider.getId(), serviceId)
                 .orElseThrow(() -> new ApiException(ErrorCode.AVAILABILITY_NOT_FOUND));
         availability.deactivate();
+        cacheInvalidator.serviceChanged(provider.getId(), serviceId);
     }
 
     @Transactional

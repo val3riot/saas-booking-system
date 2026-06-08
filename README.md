@@ -20,8 +20,9 @@ infra/docker/dev/    Servizi locali per sviluppo
 ## Backend
 
 ```bash
-docker compose -f infra/docker/dev/docker-compose.yml up -d postgres
+docker compose -f infra/docker/dev/docker-compose.yml up -d postgres redis
 cd BE/saas.booking
+cp .env.example .env
 ./mvnw spring-boot:run
 ```
 
@@ -31,7 +32,7 @@ Swagger:
 http://localhost:8080/swagger-ui.html
 ```
 
-Swagger è esposto solo con profilo `dev`:
+Il `.env.example` attiva il profilo `dev`; Swagger è esposto solo con quel profilo:
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run

@@ -1,4 +1,10 @@
 spring:
+  cache:
+    type: none
+  data:
+    redis:
+      repositories:
+        enabled: false
   datasource:
     url: jdbc:h2:mem:booking-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
     username: sa

@@ -6,11 +6,13 @@ import static it.booking.common.TextUtils.trimNullable;
 
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
+import it.booking.config.CacheInvalidator;
 import it.booking.provider.Provider;
 import it.booking.provider.ProviderRepository;
 import it.booking.user.AppUser;
 import it.booking.user.AppUserRepository;
 import it.booking.user.UserRole;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,17 +22,20 @@ public class AuthService {
 
     private final AppUserRepository users;
     private final ProviderRepository providers;
+    private final CacheInvalidator cacheInvalidator;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public AuthService(
             AppUserRepository users,
             ProviderRepository providers,
+            CacheInvalidator cacheInvalidator,
             PasswordEncoder passwordEncoder,
             JwtService jwtService
     ) {
         this.users = users;
         this.providers = providers;
+        this.cacheInvalidator = cacheInvalidator;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -62,6 +67,7 @@ public class AuthService {
                 trim(request.city()),
                 trimNullable(request.address())
         ));
+        cacheInvalidator.providerSearchChanged();
 
         return AuthResponse.bearer(jwtService.issueToken(user.getId(), user.getEmail(), user.getRole()));
     }

@@ -10,6 +10,7 @@ import it.booking.booking.BookingRepository;
 import it.booking.booking.BookingStatus;
 import it.booking.common.ApiException;
 import it.booking.common.ErrorCode;
+import it.booking.config.CacheInvalidator;
 import it.booking.user.AppUser;
 import it.booking.user.AppUserRepository;
 import it.booking.user.UserRole;
@@ -29,6 +30,7 @@ public class ProviderService {
     private final AppUserRepository users;
     private final BookingRepository bookings;
     private final AuditService auditService;
+    private final CacheInvalidator cacheInvalidator;
     private final ProviderMapper providerMapper;
     private final PasswordEncoder passwordEncoder;
 
@@ -37,6 +39,7 @@ public class ProviderService {
             AppUserRepository users,
             BookingRepository bookings,
             AuditService auditService,
+            CacheInvalidator cacheInvalidator,
             ProviderMapper providerMapper,
             PasswordEncoder passwordEncoder
     ) {
@@ -44,6 +47,7 @@ public class ProviderService {
         this.users = users;
         this.bookings = bookings;
         this.auditService = auditService;
+        this.cacheInvalidator = cacheInvalidator;
         this.providerMapper = providerMapper;
         this.passwordEncoder = passwordEncoder;
     }
@@ -88,6 +92,7 @@ public class ProviderService {
                 trim(request.city()),
                 trimNullable(request.address())
         ));
+        cacheInvalidator.providerSearchChanged();
         return providerMapper.toResponse(provider);
     }
 
@@ -107,6 +112,7 @@ public class ProviderService {
                 trim(request.city()),
                 trimNullable(request.address())
         ));
+        cacheInvalidator.providerSearchChanged();
         return providerMapper.toResponse(provider);
     }
 
@@ -124,6 +130,7 @@ public class ProviderService {
             throw new ApiException(ErrorCode.PROVIDER_ALREADY_EXISTS);
         }
 
+        boolean wasCatalogVisible = provider.isActive() && provider.getUser().isEnabled();
         if (!provider.getUser().getId().equals(user.getId())) {
             provider.changeUser(user);
         }
@@ -139,6 +146,12 @@ public class ProviderService {
         );
         if (shouldCancelProviderBookings) {
             cancelActiveProviderBookings(provider, admin, PROVIDER_DEACTIVATED_BOOKING_CANCELLATION_REASON);
+        }
+        boolean isCatalogVisible = provider.isActive() && provider.getUser().isEnabled();
+        if (wasCatalogVisible != isCatalogVisible) {
+            cacheInvalidator.providerVisibilityChanged(provider.getId());
+        } else {
+            cacheInvalidator.providerChanged(provider.getId());
         }
         return providerMapper.toResponse(provider);
     }
@@ -156,6 +169,7 @@ public class ProviderService {
                 trimNullable(request.address()),
                 provider.isActive()
         );
+        cacheInvalidator.providerChanged(provider.getId());
         return providerMapper.toResponse(provider);
     }
 
@@ -167,6 +181,7 @@ public class ProviderService {
             throw new ApiException(ErrorCode.PROVIDER_USER_DISABLED);
         }
         provider.activate();
+        cacheInvalidator.providerVisibilityChanged(provider.getId());
     }
 
     @Transactional
@@ -180,6 +195,7 @@ public class ProviderService {
         if (shouldCancelProviderBookings) {
             cancelActiveProviderBookings(provider, admin, PROVIDER_DEACTIVATED_BOOKING_CANCELLATION_REASON);
         }
+        cacheInvalidator.providerVisibilityChanged(provider.getId());
     }
 
     @Transactional

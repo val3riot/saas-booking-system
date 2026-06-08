@@ -1,3 +1,21 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/booking}
+    username: ${SPRING_DATASOURCE_USERNAME:booking}
+    password: ${SPRING_DATASOURCE_PASSWORD:booking}
+  docker:
+    compose:
+      enabled: ${SPRING_DOCKER_COMPOSE_ENABLED:false}
+      file: ../../infra/docker/dev/docker-compose.yml
+      lifecycle-management: start_only
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+
 springdoc:
   api-docs:
     enabled: true
@@ -13,3 +31,5 @@ app:
       - http://localhost:5174
       - http://127.0.0.1:5173
       - http://127.0.0.1:5174
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-before-production}

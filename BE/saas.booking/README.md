@@ -7,6 +7,7 @@ Backend base per una booking platform con autenticazione JWT, ruoli applicativi,
 - Spring Boot 3
 - Java 21
 - PostgreSQL
+- Redis
 - JWT
 - Docker Compose
 - Swagger/OpenAPI
@@ -14,12 +15,24 @@ Backend base per una booking platform con autenticazione JWT, ruoli applicativi,
 
 ## Avvio locale
 
+Creare la configurazione locale, che resta esclusa da Git:
+
 ```bash
-docker compose -f ../../infra/docker/dev/docker-compose.yml up -d postgres
+cp .env.example .env
+```
+
+Il backend importa automaticamente `.env` quando viene avviato da
+`BE/saas.booking`. Il template attiva il profilo `dev` e contiene solo valori
+adatti allo sviluppo locale.
+
+Avviare l'infrastruttura e l'applicazione:
+
+```bash
+docker compose -f ../../infra/docker/dev/docker-compose.yml up -d postgres redis
 ./mvnw spring-boot:run
 ```
 
-Se vuoi far avviare PostgreSQL automaticamente da Spring Boot Docker Compose:
+Se vuoi far avviare i servizi Docker Compose automaticamente da Spring Boot:
 
 ```bash
 SPRING_DOCKER_COMPOSE_ENABLED=true ./mvnw spring-boot:run
@@ -31,11 +44,17 @@ Swagger UI:
 http://localhost:8080/swagger-ui.html
 ```
 
-Swagger e OpenAPI sono disponibili solo con il profilo `dev`:
+Swagger e OpenAPI sono disponibili solo con il profilo `dev`, già configurato
+nel `.env.example`:
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
+
+Fuori dallo sviluppo locale `SPRING_DATASOURCE_URL`,
+`SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `REDIS_HOST` e
+`JWT_SECRET` sono obbligatorie. Non usare il secret JWT del template in ambienti
+condivisi o di produzione.
 
 Test:
 
@@ -175,6 +194,31 @@ La ricerca catalogo provider supporta:
 - `direction`: `ASC` o `DESC`.
 
 La risposta paginata usa un contratto stabile con `content`, `page`, `size`, `totalElements`, `totalPages`, `first` e `last`.
+
+## Cache Redis
+
+Redis viene usato solo per letture pubbliche del catalogo con riuso prevedibile:
+
+- ricerca provider iniziale del frontend, senza filtri (`5m`);
+- dettaglio provider (`15m`);
+- servizi prenotabili del provider (`10m`);
+- dettaglio servizio (`10m`).
+
+Le ricerche filtrate non vengono memorizzate. Slot, prenotazioni, agenda,
+disponibilita amministrative e dati utente restano calcolati o letti live.
+Le scritture invalidano le cache coinvolte; il TTL resta una protezione aggiuntiva.
+PostgreSQL e la source of truth: Redis contiene soltanto copie temporanee dei dati.
+
+La cache opera in modalita fail-open. Se Redis non e disponibile, le letture
+proseguono interrogando PostgreSQL e gli errori di scrittura o invalidazione della
+cache non annullano le operazioni applicative. Un dato non invalidato durante il
+guasto puo restare in cache fino alla scadenza del relativo TTL dopo il ripristino.
+I timeout di connessione e comando sono configurabili con
+`REDIS_CONNECT_TIMEOUT` e `REDIS_COMMAND_TIMEOUT`.
+
+I TTL sono configurabili tramite `CACHE_TTL_PROVIDER_SEARCH`,
+`CACHE_TTL_PROVIDER_DETAILS`, `CACHE_TTL_PROVIDER_SERVICES` e
+`CACHE_TTL_SERVICE_DETAILS`.
 
 Le availability exception permettono al provider di bloccare fasce temporali puntuali:
 

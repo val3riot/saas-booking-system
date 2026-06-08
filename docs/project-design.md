@@ -262,8 +262,11 @@ Spring Boot REST API
 PostgreSQL
 
 Redis
-- cache provider
-- cache disponibilità
+- cache della ricerca provider iniziale
+- cache dettaglio provider
+- cache lista e dettaglio servizi prenotabili
+- nessuna cache per slot o disponibilità calcolate
+- comportamento fail-open: PostgreSQL resta la source of truth quando Redis non è disponibile
 
 Kafka
 - eventi prenotazione
